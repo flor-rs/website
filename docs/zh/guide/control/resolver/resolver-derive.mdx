@@ -1,0 +1,472 @@
+# Resolver 派生宏
+
+`#[derive(Resolver)]` 是 Flor 提供的样式解析派生宏。它为样式枚举自动生成 Resolver 类型、链式方法、状态变体支持和响应式更新能力。
+
+这个宏内置控件状态机制，主要用于控件的样式系统。它可以与 [class 系统](/zh/guide/use/builder/class) 配合使用，在 `on_update_class` 中解析类名并更新样式。
+
+控件作者只需要定义样式枚举，派生宏会自动生成所有 Resolver 相关代码。
+
+## 最简用法
+
+定义一个样式枚举，添加 `#[derive(Resolver)]`：
+
+```rust
+use flor::view::resolver::Resolver;
+use flor::types::Color;
+
+#[derive(Clone, Debug, Resolver)]
+pub enum LabelStyle {
+    TextColor(Color),
+    FontSize(f32),
+}
+```
+
+派生宏会自动生成：
+
+- `LabelStyleKey` - 样式属性键枚举
+- `LabelStyleResolver` - Resolver 类型别名
+- `LabelStyleResolverExt` trait - 链式方法（`.text_color(...)`、`.font_size(...)`）
+- `LabelStyleComputed` - 计算后的样式结构体
+- `LabelStyleUpdate` - 响应式更新枚举
+- `computed_label_style` 函数 - 将原始样式值映射到 `Computed` 结构体
+
+## 生成的类型
+
+### Key 枚举
+
+`{EnumName}Key` 是样式属性键，用于 Resolver 内部查找：
+
+```rust
+pub enum LabelStyleKey {
+    TextColor,
+    FontSize,
+}
+```
+
+### Resolver 类型别名
+
+`{EnumName}Resolver` 是完整的 Resolver 类型别名：
+
+```rust
+pub type LabelStyleResolver = Resolver<
+    LabelStyleKey,
+    LabelStyle,
+    LabelStyleComputed,
+    fn(&UnitResolver, &ResolverComputeMap<LabelStyleKey, LabelStyle>) -> LabelStyleComputed
+>;
+```
+
+### Computed 结构体
+
+`{EnumName}Computed` 是计算后的样式结构体，所有字段都是 `Option`：
+
+```rust
+#[derive(Clone, Debug, Default)]
+pub struct LabelStyleComputed {
+    pub text_color: Option<Color>,
+    pub font_size: Option<f32>,
+}
+```
+
+绘制时读取 computed 结构体：
+
+```rust
+fn on_draw(&mut self, ...) {
+    let style = self.style_resolver.get_data_clone(ControlState::Normal);
+    let color = style.text_color.unwrap_or(Color::BLACK);
+    let size = style.font_size.unwrap_or(16.0);
+}
+```
+
+## 链式方法
+
+`{EnumName}ResolverExt` trait 为 Resolver 提供链式方法。方法名是变体名的 snake_case 形式：
+
+```rust
+pub trait LabelStyleResolverExt {
+    fn text_color(self, value: Color) -> Self;
+    fn font_size(self, value: f32) -> Self;
+    fn set_text_color(&mut self, value: Color) -> &mut Self;
+    fn set_font_size(&mut self, value: f32) -> &mut Self;
+}
+```
+
+使用示例：
+
+```rust
+let resolver = LabelStyleResolver::new(view_id)
+    .text_color(Color::RED)
+    .font_size(14.0);
+```
+
+## 状态变体
+
+Resolver 支持按 `ControlState` 存储不同样式变体。通过 `.normal()`、`.hover()`、`.focus()`、`.active()`、`.disabled()` 切换当前状态：
+
+```rust
+let resolver = LabelStyleResolver::new(view_id)
+    .normal()
+    .text_color(Color::BLACK)
+    .font_size(16.0)
+    .hover()
+    .text_color(Color::BLUE)
+    .focus()
+    .text_color(Color::RED);
+```
+
+绘制时按当前控件状态读取：
+
+```rust
+let style = resolver.get_data_clone(control_state);
+```
+
+状态继承规则：
+
+- `Hover` 继承 `Normal` 的样式，再覆盖 Hover 变体
+- `Focus` 继承 `Normal` 的样式，再覆盖 Focus 变体
+- `Active` 继承 `Normal` 和 `Focus` 的样式，再覆盖 Active 变体
+- `Disabled` 不继承，只使用 Disabled 变体
+
+## StyleBuilder
+
+派生宏默认为控件生成 `StyleBuilder` trait 实现，允许应用侧通过 `.style(...)` 方法修改样式：
+
+```rust
+impl StyleBuilder<LabelStyleResolver> for Label {
+    fn style(mut self, style_fn: impl Fn(LabelStyleResolver) -> LabelStyleResolver) -> Self {
+        self.style = style_fn(self.style);
+        self
+    }
+}
+```
+
+应用侧使用：
+
+```rust
+label("标题")
+    .style(|s| s.text_color(Color::RED).font_size(24.0));
+```
+
+`.style(...)` 方法接收一个函数，函数里可以使用 ResolverExt 的链式方法修改样式。
+
+## Update 枚举
+
+派生宏默认生成 `{EnumName}Update` 枚举和 `update_view` 方法：
+
+```rust
+pub enum LabelStyleUpdate {
+    TextColor(ControlState, Color),
+    FontSize(ControlState, f32),
+}
+
+impl LabelStyle {
+    pub fn update_view<D, F>(
+        resolver: &mut LabelStyleResolver,
+        update: LabelStyleUpdate
+    ) { ... }
+}
+```
+
+`Update` 枚举包含每个样式变体的更新类型，`update_view` 方法会更新 Resolver 中对应状态的样式值。
+
+## 配置参数
+
+通过 `#[resolver(...)]` 属性配置生成内容：
+
+### update_view = false
+
+跳过 Update 枚举和 update_view 方法生成：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(update_view = false)]
+pub enum Layout {
+    Display(Display),
+}
+```
+
+适用于不需要响应式更新的样式类型。
+
+### computed = false
+
+跳过 Computed 结构体生成：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(computed = false, data = taffy::Style)]
+pub enum Layout {
+    Display(Display),
+}
+```
+
+适用于直接使用外部类型（如 `taffy::Style`）作为计算结果的场景。
+
+### computed_fn = false
+
+跳过 `computed_xxx` 独立函数生成。默认情况下，派生宏会生成一个 `pub fn computed_{enum_snake_name}(...)` 函数，将枚举的原始样式值映射到 `Computed` 结构体：
+
+```rust
+// 自动生成的函数（以 LabelStyle 为例）
+pub fn computed_label_style(
+    _unit_resolver: &UnitResolver,
+    variants: &ResolverComputeMap<LabelStyleKey, LabelStyle>,
+) -> LabelStyleComputed {
+    let mut computed = LabelStyleComputed::default();
+    for (k, v) in variants.iter() {
+        match k {
+            LabelStyleKey::TextColor => {
+                if let LabelStyle::TextColor(val) = v {
+                    computed.text_color = Some(val.clone());
+                }
+            }
+            LabelStyleKey::FontSize => {
+                if let LabelStyle::FontSize(val) = v {
+                    computed.font_size = Some(val.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    computed
+}
+```
+
+这个函数会被传入 `new_with_compute_func`：
+
+```rust
+LabelStyleResolver::new_with_compute_func(view_id, computed_label_style)
+```
+
+当不需要自动生成 compute 函数时，可以关闭：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(computed_fn = false)]
+pub enum MyStyle {
+    Value(f32),
+}
+```
+
+> **注意**：`computed_fn = false` 通常搭配 `computed = false` 使用（如 Layout），此时既不生成 `Computed` 结构体，也不生成 compute 函数。如果只关闭 `computed_fn` 但保留 `computed`，则需要手动编写 compute 函数。
+
+### data = Type
+
+指定 Resolver 的数据类型，生成类型别名：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(data = taffy::Style)]
+pub enum Layout {
+    Display(Display),
+}
+```
+
+生成的 `LayoutResolver` 会使用 `taffy::Style` 作为 D 泛型。
+
+### builder = false
+
+跳过 StyleBuilder 生成：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(builder = false)]
+pub enum InternalStyle {
+    Value(f32),
+}
+```
+
+适用于内部样式类型，不需要暴露给应用侧 builder。
+
+### default = false
+
+跳过 Resolver 的 Default 实现：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(default = false)]
+pub enum CustomStyle {
+    Value(f32),
+}
+```
+
+## 变体属性
+
+### skip_attr
+
+跳过某个变体的所有生成：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+pub enum Style {
+    Color(Color),
+    #[resolver(skip_attr)]
+    InternalDebug(String),  // 不生成 Key、方法等
+}
+```
+
+### skip_linkfn
+
+跳过链式方法生成，但保留 Key 和其他内容：
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+pub enum Layout {
+    #[resolver(skip_linkfn)]
+    Size(Size<Dimension>),  // 不生成 .size() 方法
+    Display(Display),
+}
+```
+
+## 控件中的实际使用
+
+以下示例展示 Resolver 在控件中的完整使用流程。
+
+### 构造函数
+
+控件构造时创建 Resolver，可以传入自定义计算函数：
+
+```rust
+use flor::view::ViewId;
+use flor::view::resolver::LabelStyleResolver;
+
+pub struct Label {
+    view_id: ViewId,
+    title: String,
+    style: LabelStyleResolver,
+}
+
+impl Label {
+    pub fn new(title: String) -> Self {
+        let view_id = ViewId::new();
+
+        Self {
+            view_id,
+            title,
+            // 使用 new_with_compute_func 传入计算函数
+            style: LabelStyleResolver::new_with_compute_func(view_id, computed_label_style),
+        }
+    }
+}
+```
+
+`computed_label_style` 函数由派生宏自动生成，它会遍历所有样式变体并填充 `LabelStyleComputed`。
+
+### on_measure
+
+测量时按当前控件状态读取样式：
+
+```rust
+fn on_measure(
+    &mut self,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<AvailableSpace>,
+    _style: &Style,
+    control_state: ControlState,
+    render: &mut FlorRenderer,
+) -> Result<Size<f32>, Error> {
+    // 获取当前状态的样式
+    let computed = self.style.get_data_borrow(control_state);
+
+    // 使用样式值进行测量
+    let font_size = computed.font_size.unwrap_or(16.0);
+    let font_family = computed.font_family.clone().unwrap_or_default();
+
+    // 创建文本格式并测量
+    let text_format = render.create_text_format(&font_family)?;
+    text_format.set_font_size(font_size);
+
+    let layout_text = render.create_text_layout(self.title.clone(), bounds, text_format)?;
+    let (width, height) = layout_text.measure_text()?;
+
+    Ok(Size { width, height })
+}
+```
+
+`get_data_borrow` 返回 RwLock 的映射守卫，避免克隆开销。如果需要多次访问或跨方法传递，使用 `get_data_clone`。
+
+### on_draw
+
+绘制时同样按控件状态读取样式：
+
+```rust
+fn on_draw(
+    &mut self,
+    render: &mut FlorRenderer,
+    control_state: ControlState,
+    abs_location: (f32, f32),
+    layout: ComputedLayout,
+) -> Result<(), Error> {
+    let computed = self.style.get_data_borrow(control_state);
+
+    // 读取样式值，使用 unwrap_or 提供默认值
+    let text_color = computed.text_color.unwrap_or(Color::BLACK);
+    let font_size = computed.font_size.unwrap_or(16.0);
+
+    // 使用样式绘制
+    let brush = render.create_solid_color_brush(text_color, None)?;
+    // ...
+}
+```
+
+### on_update_class
+
+`on_update_class` 是 class 系统的入口。控件在这里解析类名并更新样式：
+
+```rust
+fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error> {
+    // 1. 切换到当前状态
+    self.style.switch_control_state(control_state);
+
+    // 2. 解析类名并设置样式
+    let class = class.trim();
+
+    if let Some(rest) = class.strip_prefix("text-") {
+        // text-red-500 -> 设置颜色
+        if let Some(color) = parse_color(rest) {
+            self.style.set_text_color(color);
+        }
+        // text-lg -> 设置字号
+        if let Some(size) = self.style.unit_resolver.parse_tw_font_size(rest) {
+            self.style.set_font_size(size);
+        }
+    }
+
+    if let Some(rest) = class.strip_prefix("bg-") {
+        // bg-blue-500 -> 设置背景
+        if let Some(color) = parse_color(rest) {
+            self.style.set_background(Background::Color(color));
+        }
+    }
+
+    Ok(())
+}
+```
+
+关键步骤：
+
+1. `switch_control_state(control_state)` - 切换 Resolver 到当前状态
+2. `set_xxx(...)` - 使用生成的链式方法设置样式值
+
+每个类名匹配成功后直接返回，不匹配则继续尝试其他规则。
+
+### on_update_state
+
+响应式更新时处理 `LabelStyleUpdate`：
+
+```rust
+fn on_update_state(&mut self, state: Box<dyn Any>) {
+    // 尝试处理标题更新
+    if let Ok(title) = state.downcast::<String>() {
+        self.title = *title;
+        return;
+    }
+
+    // 尝试处理样式更新
+    if let Ok(update) = state.downcast::<LabelStyleUpdate>() {
+        // 调用宏生成的 update_view 方法
+        LabelStyle::update_view(&mut self.style, *update);
+    }
+}
+```
+
+`LabelStyleUpdate` 由派生宏自动生成，包含每个样式变体的更新枚举。`update_view` 方法会更新 Resolver 中对应状态的样式值。

@@ -1,0 +1,160 @@
+# Resolver Layer 机制
+
+Resolver Layer 是 Flor 用来组织控件配置的机制。它让控件的布局和样式可以分段写、重复写、按需覆盖，而不是要求你一次性把所有配置拼成一整块。
+
+在使用代码里，`.class(...)`、`.layout(...)`、`.style(...)` 都会使用这套 Layer 机制。每调用一次这些 builder，都可以理解成给控件追加一层配置。
+
+Layer 的合并规则很简单：
+
+| 情况 | 结果 |
+| --- | --- |
+| 不同层写了不同属性 | 这些属性会合并保留。 |
+| 不同层写了同一个属性 | 无论值相同还是不同，都以后写入的那一层为准。 |
+
+也就是说，你可以把 class、layout、style 拆开多次写，也可以混在一起写。后面的调用不会把前面整层配置清空；它只会覆盖自己重新写过的属性。
+
+## 混合调用
+
+比如先用 class 写常用布局，再用 layout builder 精确覆盖其中一个属性：
+
+```rust
+use flor::taffy::Display;
+use flor::view::builder::{ClassBuilder, LayoutBuilder};
+use flor::view::resolver::LayoutResolverExt;
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let panel = div(views![label("内容")])
+    .class("hidden p-4")
+    .layout(|layout| layout.display(Display::Flex))
+    .class("gap-3");
+```
+
+这段代码可以按三层理解：
+
+| 层 | 写入内容 |
+| --- | --- |
+| `.class("hidden p-4")` | 写入 `display` 和内边距。 |
+| `.layout(|layout| layout.display(Display::Flex))` | 再次写入 `display`。 |
+| `.class("gap-3")` | 写入间距。 |
+
+最终结果是：`display` 使用后写入的 `Display::Flex`，内边距来自 `p-4`，间距来自 `gap-3`。
+
+## 同属性覆盖
+
+同一个属性写多次时，最后一次写入生效。class 是这样：
+
+```rust
+use flor::view::builder::ClassBuilder;
+use flor_lys::label::label;
+
+let item = label("项目")
+    .class("p-2")
+    .class("p-4");
+```
+
+最终内边距是 `p-4`。
+
+layout builder 也是这样：
+
+```rust
+use flor::taffy::Display;
+use flor::view::builder::LayoutBuilder;
+use flor::view::resolver::LayoutResolverExt;
+use flor_lys::label::label;
+
+let item = label("项目")
+    .layout(|layout| layout.display(Display::None))
+    .layout(|layout| layout.display(Display::Flex));
+```
+
+最终 `display` 是 `Display::Flex`。
+
+style builder 也是同一套规则：
+
+```rust
+use flor::view::builder::{ClassBuilder, StyleBuilder};
+use flor_lys::label::{label, LabelStyleResolverExt};
+
+let title = label("标题")
+    .class("text-lg")
+    .style(|style| style.font_size(20.0));
+```
+
+如果 `text-lg` 和 `font_size(20.0)` 都在设置字号，那么最终字号使用后写入的 `20.0`。
+
+## 不同属性合并
+
+后面的调用只覆盖它重新写过的属性。没有重新写的属性，会继续保留：
+
+```rust
+use flor::macros::color;
+use flor::view::builder::{ClassBuilder, StyleBuilder};
+use flor_lys::label::{label, LabelStyleResolverExt};
+
+let title = label("标题")
+    .class("text-lg font-bold")
+    .style(|style| style.text_color(color!("#2563eb")));
+```
+
+这里 `.class(...)` 写了字号和字重，`.style(...)` 只写文本颜色，所以最终会同时保留字号、字重和文本颜色。
+
+## 状态也按层合并
+
+状态前缀也是同样的规则。普通状态、hover、focus、active、disabled 都会分别合并自己的属性：
+
+```rust
+use flor::view::builder::ClassBuilder;
+use flor_lys::label::label;
+
+let item = label("保存")
+    .class("text-slate-700 hover:text-blue-600 hover:font-bold")
+    .class("hover:text-red-600");
+```
+
+最终普通状态使用 `text-slate-700`。hover 状态里，`font-bold` 会保留；文本颜色被后面的 `hover:text-red-600` 覆盖。
+
+## 有什么用
+
+Layer 机制的作用不是让写法变复杂，而是让你可以把配置拆到合适的位置。
+
+你可以先写一组基础配置，再在后面重新指定某些属性：
+
+```rust
+let item = label("项目")
+    .class("p-2 text-slate-700")
+    .class("p-4");
+```
+
+这里后面的 `p-4` 只覆盖内边距，`text-slate-700` 仍然保留。
+
+你也可以把某个属性单独交给响应式信号控制，而不是把整串 class 或整组样式都塞进 `if else` 里拼接：
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::taffy::Display;
+use flor::view::builder::{ClassBuilder, LayoutBuilder};
+use flor::view::resolver::LayoutResolverExt;
+use flor_lys::label::label;
+
+let open = create_signal(true);
+
+let panel = label("详情")
+    .class("p-4 text-slate-700")
+    .layout(move |layout| {
+        if open.get() {
+            layout.display(Display::Flex)
+        } else {
+            layout.display(Display::None)
+        }
+    });
+```
+
+这样，静态配置仍然写在 `.class(...)` 里，只有真正会变化的 `display` 放进响应式 `.layout(...)`。如果把这些内容全部写成一个动态字符串，通常会出现重复的 class、复杂的分支和难维护的文本拼接。
+
+Layer 机制也支撑了更高一层的控件封装：handler 可以作为参数传入，链式配置后的控件可以作为返回值继续传递。具体怎么把基础控件封装成复合控件或业务模块，见 [框架 DSL](/zh/guide/use/framework-dsl)。
+
+维护终端用户的使用体验是框架的核心目标之一。Layer 机制就是为了让应用代码能清楚表达“哪些配置是基础值，哪些配置会覆盖，哪些配置会响应变化”，从而减少为了实现交互状态而制造出来的代码噪音。
+
+只要记住一条规则：不同属性会合并，同一个属性永远后写覆盖前写。

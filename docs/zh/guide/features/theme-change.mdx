@@ -1,0 +1,35 @@
+# 主题变化
+
+`theme-change` feature 用来启用系统主题变化相关类型和事件 builder。它适合在系统从浅色模式切换到深色模式时，更新应用主题或重建相关样式。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "theme-change"] }
+```
+
+## 事件入口
+
+启用 feature 后，可以使用 `on_theme_changed(...)`：
+
+```rust
+use flor::base::platform::ThemeMode;
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let root = label("主题")
+    .on_theme_changed(|_view_id, mode| {
+        match mode {
+            ThemeMode::Light => println!("light"),
+            ThemeMode::Dark => println!("dark"),
+        }
+    });
+```
+
+`ThemeMode` 目前有两个值：
+
+| 值 | 含义 |
+| --- | --- |
+| `ThemeMode::Light` | 浅色模式。 |
+| `ThemeMode::Dark` | 深色模式。 |
+
+完整签名和当前派发状态见 [Handler API 的主题变化事件](/zh/api/handler#主题变化事件)。如果你只需要普通控件状态样式，不需要启用这个 feature；它面向的是系统主题变化。

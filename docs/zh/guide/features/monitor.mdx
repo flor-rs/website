@@ -1,0 +1,44 @@
+# 显示器信息
+
+`monitor` feature 用来启用显示器查询能力。它适合做窗口初始定位、多屏适配、读取工作区大小、按显示器 DPI 调整自定义逻辑等。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "monitor"] }
+```
+
+## 基本写法
+
+显示器入口在平台层。使用时导入 `MonitorApi` trait。
+
+```rust
+use flor::base::platform::MonitorApi;
+use flor::platform::Monitor;
+
+let monitors = Monitor::enumerate_monitors()?;
+
+for monitor in monitors {
+    println!(
+        "{} primary={} scale={} dpi=({}, {})",
+        monitor.name(),
+        monitor.is_primary(),
+        monitor.scale_factor(),
+        monitor.dpi_x(),
+        monitor.dpi_y(),
+    );
+}
+```
+
+## 查询入口
+
+| 方法 | 用途 |
+| --- | --- |
+| `Monitor::enumerate_monitors()` | 枚举所有显示器。 |
+| `Monitor::monitor_from_point(x, y)` | 查询某个屏幕坐标所在的显示器。 |
+| `Monitor::monitor_from_window_id(window_id)` | 查询窗口所在的显示器。 |
+| `monitor.rect()` | 显示器完整区域。 |
+| `monitor.work_area()` | 可用工作区，通常会排除任务栏等系统区域。 |
+| `monitor.scale_factor()` | 缩放因子，通常由 DPI 推导。 |
+| `monitor.dpi_x()` / `monitor.dpi_y()` | 当前显示器 DPI。 |
+
+如果只是想让布局单位随窗口 DPI 更新，通常不需要手动查询显示器；看 [高 DPI](/zh/guide/features/hi-dpi)。

@@ -1,0 +1,218 @@
+# Class Name Resolution Helper Functions
+
+`flor::view::resolver::shared` provides helper functions for class name resolution, used to parse state prefixes, colors, rounded corners, font weights and other common style class names.
+
+```rust
+use flor::view::resolver::shared::*;
+```
+
+## parse_state_prefix
+
+Parse state prefix in class name, return corresponding `ControlState` and remaining class name.
+
+```rust
+pub fn parse_state_prefix(class: &str) -> (ControlState, &str)
+```
+
+### Supported Prefixes
+
+| Prefix | Returned State |
+| --- | --- |
+| `hover:` | `ControlState::Hover` |
+| `focus:` | `ControlState::Focus` |
+| `active:` | `ControlState::Active` |
+| `disabled:` | `ControlState::Disabled` |
+| No prefix | `ControlState::Normal` |
+
+### Example
+
+```rust
+let (state, rest) = parse_state_prefix("hover:bg-red-500");
+// state = ControlState::Hover, rest = "bg-red-500"
+
+let (state, rest) = parse_state_prefix("bg-blue-200");
+// state = ControlState::Normal, rest = "bg-blue-200"
+```
+
+## extract_bracket_value
+
+Extract value inside brackets, used to parse `[value]` form arbitrary value class names.
+
+```rust
+pub fn extract_bracket_value(s: &str) -> Option<&str>
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `s` | `&str` | String to parse |
+
+### Return Value
+
+- If string starts with `[` and ends with `]`, return content inside brackets
+- Otherwise return `None`
+
+### Example
+
+```rust
+let val = extract_bracket_value("[#fff]");
+// val = Some("#fff")
+
+let val = extract_bracket_value("#fff");
+// val = None
+```
+
+## parse_color
+
+Parse color value, supports keywords, Hex and Tailwind color names.
+
+```rust
+pub fn parse_color(value: &str) -> Option<Color>
+```
+
+### Supported Formats
+
+| Format | Example | Description |
+| --- | --- | --- |
+| Keyword | `transparent`, `black`, `white` | Predefined color names |
+| Hex | `#fff`, `#ffffff` | 3-digit or 6-digit hexadecimal |
+| Bracket Hex | `[#fff]`, `[#ffffff]` | Hex wrapped in brackets |
+| Tailwind | `red-500`, `blue-100` | TW palette names |
+
+### Tailwind Palette
+
+Supports following palettes, each palette contains 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950 total 11 shades:
+
+- Gray series: `slate`, `gray`, `zinc`, `neutral`
+- Red series: `red`, `orange`, `amber`, `yellow`
+- Green series: `lime`, `green`, `emerald`, `teal`, `cyan`
+- Blue series: `sky`, `blue`, `indigo`
+- Purple series: `violet`, `purple`, `fuchsia`, `pink`, `rose`
+
+### Example
+
+```rust
+let color = parse_color("transparent");
+// color = Some(Color::rgba(0, 0, 0, 0))
+
+let color = parse_color("#fff");
+// color = Some(Color::from_hex_str("#fff"))
+
+let color = parse_color("red-500");
+// color = Some(Color::RED_500)
+
+let color = parse_color("slate-700");
+// color = Some(Color::SLATE_700)
+```
+
+## parse_tw_color
+
+Parse Tailwind color name, return corresponding `Color`.
+
+```rust
+pub fn parse_tw_color(color_name: &str, shade: &str) -> Option<Color>
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `color_name` | `&str` | Palette name, like `red`, `blue` |
+| `shade` | `&str` | Shade number, like `500`, `100` |
+
+### Return Value
+
+- If both palette name and shade are valid, return corresponding `Color`
+- Otherwise return `None`
+
+### Example
+
+```rust
+let color = parse_tw_color("red", "500");
+// color = Some(Color::RED_500)
+
+let color = parse_tw_color("emerald", "700");
+// color = Some(Color::EMERALD_700)
+
+let color = parse_tw_color("unknown", "500");
+// color = None
+```
+
+## parse_rounded
+
+Parse `rounded-*` class name, return rounded corner value.
+
+```rust
+pub fn parse_rounded(class: &str) -> Option<f32>
+```
+
+### Supported Class Names
+
+| Class Name | Return Value | Description |
+| --- | --- | --- |
+| `rounded-none` | `0.0` | No rounded corner |
+| `rounded-sm` | `2.0` | Small rounded corner |
+| `rounded` | `4.0` | Default rounded corner |
+| `rounded-md` | `6.0` | Medium rounded corner |
+| `rounded-lg` | `8.0` | Large rounded corner |
+| `rounded-xl` | `12.0` | Larger rounded corner |
+| `rounded-2xl` | `16.0` | Extra large rounded corner |
+| `rounded-3xl` | `24.0` | Huge rounded corner |
+| `rounded-full` | `9999.0` | Fully circular |
+| `rounded-[Npx]` | `N.0` | Custom pixel value |
+| `rounded-[N]` | `N.0` | Custom numeric value |
+
+### Example
+
+```rust
+let radius = parse_rounded("rounded-lg");
+// radius = Some(8.0)
+
+let radius = parse_rounded("rounded-[12px]");
+// radius = Some(12.0)
+
+let radius = parse_rounded("rounded-unknown");
+// radius = None
+```
+
+## parse_font_weight
+
+Parse font weight in `font-*` class name, return `FontWeight`.
+
+```rust
+pub fn parse_font_weight(name: &str) -> Option<FontWeight>
+```
+
+### Supported Weight Names
+
+| Class Name | Return Value | CSS Weight |
+| --- | --- | --- |
+| `font-thin` | `FontWeight::Thin` | 100 |
+| `font-extralight` | `FontWeight::ExtraLight` | 200 |
+| `font-light` | `FontWeight::Light` | 300 |
+| `font-normal` | `FontWeight::Normal` | 400 |
+| `font-medium` | `FontWeight::Medium` | 500 |
+| `font-semibold` | `FontWeight::SemiBold` | 600 |
+| `font-bold` | `FontWeight::Bold` | 700 |
+| `font-extrabold` | `FontWeight::ExtraBold` | 800 |
+| `font-black` | `FontWeight::Black` | 900 |
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `name` | `&str` | Weight name (without `font-` prefix), like `bold`, `medium` |
+
+### Example
+
+```rust
+let weight = parse_font_weight("bold");
+// weight = Some(FontWeight::Bold)
+
+let weight = parse_font_weight("semibold");
+// weight = Some(FontWeight::SemiBold)
+
+let weight = parse_font_weight("unknown");
+// weight = None
+```

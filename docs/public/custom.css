@@ -1,0 +1,10 @@
+.rspress-hero-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 2.5rem;
+}
+
+.rspress-hero-content {
+  min-width: 900px;
+}

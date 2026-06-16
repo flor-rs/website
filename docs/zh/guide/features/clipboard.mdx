@@ -1,0 +1,46 @@
+# 剪贴板
+
+`clipboard` feature 用来启用系统剪贴板读写能力。它适合实现复制、粘贴、导入导出临时文本等功能。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "clipboard"] }
+```
+
+## 基本写法
+
+剪贴板入口在平台层。使用时导入 `ClipboardApi` trait，然后创建 `Clipboard`。
+
+```rust
+use flor::base::platform::ClipboardApi;
+use flor::platform::clipboard::Clipboard;
+
+let clipboard = Clipboard(None);
+clipboard.set_clipboard_text("hello flor".to_string())?;
+
+let text = clipboard.get_clipboard_text()?;
+println!("{text}");
+```
+
+`Clipboard(None)` 表示不绑定具体窗口。需要把剪贴板操作关联到某个窗口时，可以传入 `Some(window_id)`。
+
+```rust
+use flor::base::platform::ClipboardApi;
+use flor::platform::clipboard::Clipboard;
+
+let clipboard = Clipboard(Some(window_id));
+clipboard.set_clipboard_text("from this window".to_string())?;
+```
+
+## 支持的内容
+
+`ClipboardApi` 提供两类入口：
+
+| 方法 | 用途 |
+| --- | --- |
+| `set_clipboard_text(...)` / `get_clipboard_text()` | 读写文本。 |
+| `set_clipboard(...)` / `get_clipboard(...)` | 按剪贴板格式读写原始字节。 |
+| `register_format(...)` | 注册自定义剪贴板格式。 |
+| `set_clipboard_muti_type(...)` | 一次写入多个格式。 |
+
+常见剪贴板格式由 `ClipboardType` 表示，包括 `Text`、`Image`、`Rtf`、`Html`、`Files`。如果要和其它应用交换复杂数据，可以先注册自定义格式，再读写对应字节。

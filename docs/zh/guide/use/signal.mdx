@@ -1,0 +1,500 @@
+# Flor Signal 响应式系统
+
+Flor 框架内置了一个轻量级的响应式信号系统。该信号系统受 [Floem](https://github.com/lapce/floem) 启发，参考了其 API 设计，但由我们完全独立实现。与 Floem 不同的是，因为 Flor 的设计目标，**Flor Signal 天生支持跨线程使用**，信号可以在多线程环境下安全地读写和传递。
+
+本文主要说明如何使用 Signal。完整函数签名和 trait 列表见 [Signal API 参考](/zh/api/signal)。
+
+## 创建信号
+
+Signal 的使用入口基本都在 `flor::signal` 下。先记住这些 `create_*` API，就能完成大多数场景：
+
+| API | 用途 |
+| --- | --- |
+| `create_signal(value)` | 创建一个可读写的值信号 |
+| `create_rw_signal(value)` | 创建值信号，并直接拆成读取器和写入器 |
+| `create_signal_with_label(value, label)` | 创建带调试标签的值信号 |
+| `create_rw_signal_with_label(value, label)` | 创建带调试标签的值信号，并直接拆分读写 |
+| `create_list_signal(vec)` | 创建一个可读写的列表信号 |
+| `create_rw_list_signal(vec)` | 创建列表信号，并直接拆成读取器和写入器 |
+| `create_list_signal_with_label(vec, label)` | 创建带调试标签的列表信号 |
+| `create_rw_list_signal_with_label(vec, label)` | 创建带调试标签的列表信号，并直接拆分读写 |
+
+### 值信号
+
+最常用的是 `create_signal`。它返回一个 `RwSignal<T>`，可以读也可以写。
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+
+// 创建一个保存 i32 的可读写信号。
+let count = create_signal(0);
+
+// 读取需要 Read trait。
+let value = count.get();
+
+// 写入需要 Write trait。
+count.set(value + 1);
+
+// 基于旧值原地修改。
+count.update(|value| *value += 1);
+```
+
+如果读取和写入会交给不同的代码，使用 `create_rw_signal` 可以在创建时直接拿到一对读写句柄：
+
+```rust
+use flor::signal::{create_rw_signal, Read, Write};
+
+// read 只能读，write 只能写。
+let (read, write) = create_rw_signal(0);
+
+let value = read.get();
+write.set(value + 1);
+```
+
+也可以先创建 `RwSignal<T>`，再在需要的地方拆分或派生：
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+
+let count = create_signal(0);
+
+// 派生只读和只写句柄。
+let read = count.as_read();
+let write = count.as_write();
+
+write.set(read.get() + 1);
+
+// 或者直接拆成一对读写句柄。
+let (read, write) = count.split();
+write.set(read.get() + 1);
+```
+
+## 常量信号
+
+常量信号是很实用的能力：它允许 API 同时接收固定值和响应式值。比如控件属性既可以传 `"Hello"`，也可以传一个读取 signal 的闭包。
+
+`ConstSignal<T>` 不进入全局运行时，不建立订阅，`destroy()` 也是空操作。它只是把一个普通值包装成实现 `Read<T>` 的读取器。
+
+多数时候不需要直接写 `ConstSignal::new`，使用 `IntoRead` 更自然：
+
+```rust
+use flor::signal::{IntoRead, Read};
+
+// &str 会被转换成 ConstSignal<String>。
+let title = "Hello".into_read();
+
+assert_eq!(title.get(), "Hello".to_string());
+```
+
+`IntoRead<T>` 已经覆盖常用基础类型、`String`、`&str`、`&String`、`ConstSignal<T>`、`ReadSignal<T>` 和 `RwSignal<T>`。这让 API 可以把“固定值”和“响应式值”统一成读取器处理。
+
+## 读取与写入
+
+### 克隆读取
+
+`get()` 和 `try_get()` 会克隆值，因此要求 `T: Clone + 'static`。
+
+```rust
+use flor::signal::{create_signal, Read};
+
+let name = create_signal("Flor".to_string());
+
+// get 会克隆当前值。
+let value = name.get();
+
+// try_get 在信号已销毁时返回 None。
+let maybe_value = name.try_get();
+```
+
+`get()` 在信号不存在或类型不匹配时 panic；`try_get()` 在信号不存在时返回 `None`。
+
+### 引用读取
+
+如果值很大，不想 clone，可以使用 `get_ref()` 或 `try_get_ref()`。它们返回 `SignalRef<'_, T>`，可以像 `&T` 一样使用。
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+
+let name = create_signal("Flor".to_string());
+
+{
+    // get_ref 避免 clone，但会在守卫存活期间持有读锁。
+    let name_ref = name.get_ref();
+    assert_eq!(name_ref.len(), 4);
+}
+
+// 守卫释放后再写入同一个信号。
+name.set("Signal".to_string());
+```
+
+`SignalRef` 持有底层读锁。守卫未释放前，不要在同一线程对同一个信号调用 `set()`、`update()` 等需要写锁的操作，否则可能死锁。
+
+### 写入
+
+`set()` 会替换整个值，`update()` 会在原地修改值。
+
+```rust
+use flor::signal::{create_signal, Write};
+
+let count = create_signal(0);
+
+// 替换整个值。
+count.set(10);
+
+// 基于旧值原地修改。
+count.update(|value| *value += 1);
+```
+
+如果信号可能已经被销毁，使用 `try_set()` 和 `try_update()`：
+
+```rust
+use flor::signal::{create_signal, Signal, Write};
+
+let count = create_signal(0);
+
+// 这里模拟信号已经被动态窗口或临时页面销毁。
+count.destroy();
+
+// try_* 在信号不存在时返回 false，而不是 panic。
+assert!(!count.try_set(1));
+assert!(!count.try_update(|value| *value += 1));
+```
+
+## 响应式更新
+
+### `create_effect`
+
+`create_effect` 创建基础副作用。闭包会立即执行一次，并接收上一次执行返回的值。
+
+```rust
+use flor::signal::{create_effect, create_signal, Read, Write};
+
+let count = create_signal(0);
+
+create_effect(move |previous: Option<i32>| {
+    // 在 effect 中读取信号，会自动建立依赖。
+    let current = count.get();
+    println!("count: {current}, previous: {previous:?}");
+
+    // 返回值会成为下一次执行时的 previous。
+    current
+});
+
+// 写入 count 后，依赖 count 的 effect 会被重新执行。
+count.set(1);
+```
+
+第一次执行时 `previous` 是 `None`。后续由信号更新触发时，`previous` 是上一次闭包返回的值。
+
+### `create_updater`
+
+`create_updater` 更适合 UI 和派生状态绑定。它先执行 `compute` 得到初始值并返回；后续依赖变化时重新执行 `compute`，再把新值交给 `on_change`。
+
+```rust
+use flor::signal::{create_signal, create_updater, Read, Write};
+
+let count = create_signal(0);
+
+let initial = create_updater(
+    // compute：读取信号并生成派生值。
+    move || format!("Value: {}", count.get()),
+    // on_change：依赖更新后接收新的派生值。
+    |value| println!("updated: {value}"),
+);
+
+assert_eq!(initial, "Value: 0");
+
+// 触发依赖更新；on_change 会在后续更新中收到新值。
+count.set(5);
+```
+
+注意：`on_change` 不会在初始计算时调用，只会在依赖更新后调用。
+
+### `create_updater_with_id`
+
+普通业务代码通常使用 `create_updater` 即可。`create_updater_with_id` 主要给框架内部使用，它返回 `(Id, R)`，其中 `Id` 是 effect id，`R` 是初始值。
+
+框架内部会用它把某些 UI effect 延迟到控件激活后再入队，例如 class、layout、transform 等 builder。之所以需要延迟，是因为在布局组装期间，控件的 `ViewId` 可能还没有挂载到窗口和父级控件上。等控件激活后再把 effect id 放入更新队列，可以让这些 UI 更新在完整的控件关系中执行。
+
+## 列表信号
+
+列表信号保存 `Vec<T>`，并为每个列表元素分配独立的行级 `Id`。结构变化订阅列表 `Id`；读取或修改某个元素时，会订阅或触发该元素自己的行级 `Id`。
+
+### 创建和基础操作
+
+```rust
+use flor::signal::{create_list_signal, ListRead, ListWrite};
+
+// 列表信号保存 Vec<T>。
+let items = create_list_signal(vec![1, 2]);
+
+// 结构写入。
+items.push(3);
+items.insert(1, 10);
+
+// 元素写入。
+items.set(0, 100);
+items.update(2, |value| *value += 1);
+
+// 读取结构和元素。
+assert_eq!(items.len(), Some(4));
+assert_eq!(items.get(0), 100);
+
+// 删除会返回被移除的元素。
+let removed = items.remove(1);
+assert_eq!(removed, 10);
+```
+
+### 读取列表
+
+```rust
+use flor::signal::{create_list_signal, ListRead};
+
+let items = create_list_signal(vec![1, 2, 3]);
+
+// 读取结构信息。
+assert_eq!(items.len(), Some(3));
+assert_eq!(items.len_or_zero(), 3);
+assert!(!items.is_empty());
+
+// 读取元素值。
+assert_eq!(items.get(0), 1);
+assert_eq!(items.try_get(10), None);
+
+// 读取整个列表。
+assert!(items.contains(&2));
+assert_eq!(items.to_vec(), vec![1, 2, 3]);
+```
+
+`len()` 返回 `Option<usize>`，信号销毁后返回 `None`；`len_or_zero()` 会把不存在的列表当作空列表处理。`get(index)` 在列表不存在或越界时 panic；`try_get(index)` 在列表不存在或越界时返回 `None`。
+
+### 无克隆读取
+
+需要避免 clone 时，可以使用 `for_each_ref()` 或 `try_borrow()`。
+
+```rust
+use flor::signal::{create_list_signal, ListRead};
+
+let items = create_list_signal(vec!["a".to_string(), "b".to_string()]);
+
+// for_each_ref 可以避免把每个元素 clone 出来。
+items.for_each_ref(|item| {
+    println!("{item}");
+});
+
+// try_borrow 返回列表只读借用，适合自己控制遍历方式。
+if let Some(list_ref) = items.try_borrow() {
+    for item in list_ref.iter() {
+        println!("{item}");
+    }
+}
+```
+
+`for_each_ref()` 会订阅列表结构和遍历到的行级信号。`try_borrow()` 当前只订阅列表结构；如果 effect 需要在元素值被 `set(index, ...)` 或 `update(index, ...)` 后重新执行，优先使用 `get()`、`to_vec()`、`for_each_ref()` 或 `contains()`。
+
+### 安全写入版本
+
+所有列表写入方法都有对应的安全版本：
+
+| panic 版本 | 安全版本 | 失败时 |
+| --- | --- | --- |
+| `push(value)` | `try_push(value)` | 返回 `false` |
+| `insert(index, value)` | `try_insert(index, value)` | 返回 `false` |
+| `set(index, value)` | `try_set(index, value)` | 返回 `false` |
+| `update(index, f)` | `try_update(index, f)` | 返回 `false` |
+| `remove(index)` | `try_remove(index)` | 返回 `None` |
+| `clear()` | `try_clear()` | 返回 `false` |
+
+结构变化会触发列表 `Id`；元素值变化只触发该元素的行级 `Id`。因此，只读取 `len()` 的 effect 不会因为 `set(index, ...)` 重新执行；读取某个元素、`to_vec()` 或 `for_each_ref()` 的 effect 会对对应元素值变化敏感。
+
+## 批量更新
+
+`batch` 会在当前线程内开启批处理模式。闭包中的信号写入不会立即把每次变化都加入更新队列，而是收集变化过的信号 `Id`，闭包结束后统一入队并去重。
+
+```rust
+use flor::signal::{batch, create_signal, Write};
+
+let a = create_signal(0);
+let b = create_signal(0);
+
+batch(|| {
+    // 同一个信号在一次 batch 中多次写入，会按信号 Id 去重。
+    a.set(1);
+    a.set(2);
+
+    // 不同信号仍会分别触发自己的订阅更新。
+    b.set(3);
+});
+```
+
+`batch` 的去重粒度是信号 `Id`。同一个信号在一次 `batch` 中被多次写入，只会在闭包结束后按这个信号入队一次；所以上面的 `a.set(1)` 和 `a.set(2)` 最终只会触发一次 `a` 的订阅更新，订阅者看到的是最后一次写入后的值。不同信号仍会分别入队，例如 `a` 和 `b` 会各自触发自己的订阅更新。
+
+`batch` 是线程局部的，只影响当前线程。其他线程中的信号写入不会进入当前线程的批处理集合。如果闭包 panic，`batch` 会恢复批处理状态，然后继续向外传播 panic。
+
+## 与 UI 控件集成
+
+> 这章节属于“控件开发”的内容。如果不需要开发控件，快速了解即可。
+
+Flor UI 控件通常通过 `create_updater` 绑定响应式值。
+
+以 `Label::new` 的模式为例：
+
+```rust
+pub fn new<P: StringProp>(title: P) -> Self {
+    let view_id = ViewId::new_with_layout(|view_id| LayoutResolver::new(view_id));
+
+    let title = create_updater(
+        move || title.make(),
+        move |value| view_id.update_state(Box::new(value)),
+    );
+
+    Self {
+        view_id,
+        title,
+        style: LabelStyleResolver::new_with_compute_func(view_id, computed_label_style),
+        measure_cache: FxHashMap::default(),
+    }
+}
+```
+
+用户侧一般传入闭包读取信号：
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+use flor_lys::label::label;
+
+let title = create_signal("Hello".to_string());
+
+let view = label(move || title.get());
+
+title.set("World".to_string());
+```
+
+工作流程：
+
+1. `create_updater` 先执行一次 `compute`，得到控件初始值。
+2. `compute` 中读取信号时，当前 effect id 记录在线程局部 `SCOPE` 中。
+3. `Read::track()` 或 `ListRead::track()` 把当前 effect 订阅到被读取的信号。
+4. 信号写入时，运行时把对应信号 id 加入更新队列。
+5. Flor 事件循环调用 `RUNTIME.execute_update_queue()`，运行订阅的 effect。
+6. `on_change` 调用 `ViewId::update_state` 或其他 UI 更新入口。
+
+## 使用建议
+
+优先通过闭包传递响应式值：
+
+```rust
+label(move || title.get());
+```
+
+不要把 `title.get()` 的结果直接传给需要响应式更新的 API。那只会读取一次普通值。
+
+用 `ReadSignal<T>`、`WriteSignal<T>` 表达业务意图：
+
+```rust
+let (read, write) = create_signal(0).split();
+
+child(read);
+store_writer(write);
+```
+
+避免在 effect 中写入自己依赖的信号：
+
+```rust
+create_effect(move |_| {
+    let value = count.get();
+    count.set(value + 1);
+    value
+});
+```
+
+这类代码会在后续更新中反复触发自己，容易形成无限更新。
+
+持有 `SignalRef` 或 `ListRef` 时，先释放引用守卫，再写入同一个信号。
+
+完整函数签名和 trait 列表见 [Signal API 参考](/zh/api/signal)。
+
+## 设计说明
+
+### 生命周期
+
+所有值信号和列表信号都是全局存活的。`RwSignal<T>`、`ReadSignal<T>`、`WriteSignal<T>`、`RwListSignal<T>`、`ReadListSignal<T>`、`WriteListSignal<T>` 都是 `Copy` 句柄，复制句柄不会复制底层值，也不会改变生命周期。
+
+全局存活是 Flor 为了让信号句柄保持 `Copy` 可用而做的取舍：信号创建后会在全局运行时中存活，丢弃某个句柄不会释放底层数据。Flor 不只适合大型甚至超大型 GUI，也适合小工具类程序；在轻量程序中，Flor 的编译体积表现也是最核心的设计目标之一。对于小工具、简单窗口、界面结构稳定、窗口生命周期接近进程生命周期的程序，让信号随进程结束自然回收通常就是推荐写法之一，内存和性能影响很小。
+
+`destroy()` 更适合用在生命周期明确会结束的动态资源上，比如可反复创建和销毁的窗口、页面、面板，或者重型、超重型 GUI 中数量很大的临时信号。使用 `destroy()` 后，再配合 `try_get()`、`try_set()`、`try_update()` 处理可能已经失效的句柄。
+
+```rust
+use flor::signal::{create_signal, Read, Signal, Write};
+
+let count = create_signal(1);
+
+// 信号句柄是 Copy；another 指向同一个底层信号。
+let another = count;
+
+assert!(count.exists());
+assert_eq!(another.get(), 1);
+
+// 销毁底层信号后，所有指向它的句柄都会失效。
+count.destroy();
+
+assert!(!another.exists());
+assert_eq!(another.try_get(), None);
+assert!(!another.try_set(2));
+```
+
+列表信号销毁时，会同时销毁它内部所有行级信号。
+
+### 读写语义
+
+Flor 的读写能力是通过 trait 提供的。`ReadSignal<T>` 只实现 `Read<T>`，所以在普通类型约束下不能调用 `set()` 或 `update()`；`WriteSignal<T>` 只实现 `Write<T>`，所以不能调用 `get()`。
+
+读写拆分表达的是业务语义，不是安全边界或权限隔离。这句话并不表示读取器拥有写入器的权限：`ReadSignal<T>` 本身没有写入方法，按 `Read<T>` 约束传递时就只能读取；`WriteSignal<T>` 本身没有读取方法，按 `Write<T>` 约束传递时就只能写入。读就是读，写就是写，在业务代码和源码搜索里都能保持明确。
+
+因此，推荐放心地用对应的信号类型表达业务访问边界：只需要读的地方传 `ReadSignal<T>`，只需要写的地方传 `WriteSignal<T>`，需要两者时再传 `RwSignal<T>`。这样的拆分能让 API、调用点和代码阅读都更清晰。
+
+同时，Flor 不会让这种语义拆分拖住使用。确实需要写入时，代码里会出现 `as_write()`、`split()` 或写入器参数，读者能清楚看到这里拿到了新的访问能力；普通路径下，读取器仍然不会有写入权限。
+
+## 调试标签
+
+可以为读写信号设置标签，方便调试和追踪。
+
+```rust
+use flor::signal::{create_list_signal_with_label, create_signal_with_label};
+
+let count = create_signal_with_label(0, "counter");
+let items = create_list_signal_with_label(vec![1, 2, 3], "items");
+
+count.set_label("main_counter");
+items.set_label("main_items");
+```
+
+标签只在 `debug_assertions` 或启用 `signal-tracing` feature 时写入运行时。当前这部分主要提供运行时侧的标签记录，完整的可视化调试体验还需要等待 `devtools` 相关能力完善；因此它更适合作为后续追踪和调试工具的基础能力，而不是已经完成的用户侧调试面板。
+
+## 深入：运行时机制
+
+这部分用于理解 Signal 的内部行为；普通使用不需要先掌握这些细节。
+
+`RUNTIME` 保存以下核心状态：
+
+| 字段 | 作用 |
+| --- | --- |
+| `values` | 值信号和 effect 上一次返回值 |
+| `list_signal` | 列表信号及其行级元素 |
+| `subscribe` | `Signal Id -> Effect Id` 的订阅关系 |
+| `effects` | effect id 到 effect 实例的映射 |
+| `effect_subscriptions` | effect 被多少个信号订阅 |
+| `update_queue` | 等待执行的信号 id 或 effect id |
+| `labels` | 调试标签，仅在调试或 `signal-tracing` 下存在 |
+
+依赖追踪依靠线程局部的 `SCOPE`：
+
+1. effect 执行前，把当前 effect id 写入 `SCOPE`。
+2. `get()`、`get_ref()`、`ListRead` 读取方法会调用 `track()`。
+3. `track()` 读取 `SCOPE`，把当前 effect 订阅到对应信号 id。
+4. 写入信号时，运行时把被写入的信号 id 加入更新队列。
+5. 事件循环执行更新队列，找到订阅该信号的 effect 并运行。
+
+`batch` 使用线程局部的 `BATCH` 收集信号 id。批处理结束后，这些 id 被统一加入全局更新队列。
+
+当前实现不会在每次 effect 重新执行前主动清空旧依赖。对于依赖集合会频繁变化的动态分支，应尽量让读取范围稳定，避免长期积累不再需要的订阅。

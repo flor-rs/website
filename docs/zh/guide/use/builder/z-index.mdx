@@ -1,0 +1,80 @@
+# 层级 Builder
+
+层级 Builder 用来给控件设置 `z_index`。它只影响同一个父控件下的兄弟节点排序，不是全局层叠上下文。
+
+## 基本写法
+
+导入 `ZIndexBuilder` 后，所有实现了 `View` 的控件都可以调用 `.z_index(...)`。
+
+```rust
+use flor::view::builder::ZIndexBuilder;
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let panel = div(views![
+    label("普通内容").z_index(|| 0),
+    label("浮层内容").z_index(|| 10),
+]);
+```
+
+当前签名是：
+
+```rust
+pub trait ZIndexBuilder {
+    fn z_index(self, z_index: impl Fn() -> i32 + 'static) -> Self;
+}
+```
+
+所以固定值也要写成返回 `i32` 的闭包，例如 `.z_index(|| 10)`。如果层级依赖 signal，就在闭包里读取 signal：
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::view::builder::ZIndexBuilder;
+use flor_lys::label::label;
+
+let popup_open = create_signal(false);
+
+let popup = label("菜单")
+    .z_index(move || if popup_open.get() { 100 } else { 0 });
+```
+
+## 和 class 的关系
+
+启用 `class` feature 后，layout class 里的 `z-*` 会被解析成同一套运行时层级值。
+
+```rust
+use flor::view::builder::ClassBuilder;
+use flor_lys::label::label;
+
+let popup = label("菜单").class("z-100");
+```
+
+`z-auto` 会写入 `0`，`z-10` 会写入 `10`。`z-*` 是 layout class 里的特殊项：它不会进入 Taffy 布局样式，而是直接更新 `ViewId` 的层级值。
+
+如果你已经用 `.z_index(...)` 动态控制层级，不要再在同一个控件上用 `z-*` 表达另一个固定层级，避免后续更新互相覆盖。
+
+## 适合的场景
+
+常见用途是把同一容器里的临时内容和普通内容区分开：
+
+| 场景 | 建议 |
+| --- | --- |
+| 弹出菜单 | 给菜单设置高于触发按钮和普通内容的值。 |
+| 浮动工具条 | 给工具条设置稳定的高层级值。 |
+| 拖动预览 | 拖动期间把预览控件切到更高层级。 |
+| 普通列表项 | 保持默认 `0`，只在需要悬浮或拖动时提高。 |
+
+层级只在兄弟节点之间比较。父控件不同的两个控件，不能只靠 `z_index` 做全局遮盖；需要把它们放进同一个可排序的父容器，或者调整控件树结构。
+
+## 机制说明
+
+`.z_index(...)` 会创建一个响应式 updater。初始化时会立刻计算一次闭包结果，并调用当前控件的 `ViewId::set_z_index(value)`；之后闭包依赖的 signal 更新时，会再次写入新的层级值。
+
+`ViewId::set_z_index` 会：
+
+1. 把值写入 `VIEW_STORAGE.view_z_index`。
+2. 找到当前控件的父控件。
+3. 按兄弟控件各自的 `z_index()` 重新排序父控件的 child list。
+
+没有设置过层级的控件，`ViewId::z_index()` 返回 `0`。

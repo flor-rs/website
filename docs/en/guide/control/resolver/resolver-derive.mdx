@@ -1,0 +1,472 @@
+# Resolver Derive Macro
+
+`#[derive(Resolver)]` is Flor's style parsing derive macro. It automatically generates Resolver type, chain methods, state variant support and reactive update capability for style enums.
+
+This macro has built-in widget state mechanism, mainly used for widget style system. It can work with [class system](/en/guide/use/builder/class), parse class names in `on_update_class` and update styles.
+
+Widget authors only need to define style enum, derive macro will automatically generate all Resolver related code.
+
+## Minimal Usage
+
+Define a style enum, add `#[derive(Resolver)]`:
+
+```rust
+use flor::view::resolver::Resolver;
+use flor::types::Color;
+
+#[derive(Clone, Debug, Resolver)]
+pub enum LabelStyle {
+    TextColor(Color),
+    FontSize(f32),
+}
+```
+
+Derive macro will automatically generate:
+
+- `LabelStyleKey` - Style property key enum
+- `LabelStyleResolver` - Resolver type alias
+- `LabelStyleResolverExt` trait - Chain methods (`.text_color(...)`, `.font_size(...)`)
+- `LabelStyleComputed` - Calculated style struct
+- `LabelStyleUpdate` - Reactive update enum
+- `computed_label_style` function - Maps raw style values to `Computed` struct
+
+## Generated Types
+
+### Key Enum
+
+`{EnumName}Key` is style property key, used for Resolver internal lookup:
+
+```rust
+pub enum LabelStyleKey {
+    TextColor,
+    FontSize,
+}
+```
+
+### Resolver Type Alias
+
+`{EnumName}Resolver` is complete Resolver type alias:
+
+```rust
+pub type LabelStyleResolver = Resolver<
+    LabelStyleKey,
+    LabelStyle,
+    LabelStyleComputed,
+    fn(&UnitResolver, &ResolverComputeMap<LabelStyleKey, LabelStyle>) -> LabelStyleComputed
+>;
+```
+
+### Computed Struct
+
+`{EnumName}Computed` is calculated style struct, all fields are `Option`:
+
+```rust
+#[derive(Clone, Debug, Default)]
+pub struct LabelStyleComputed {
+    pub text_color: Option<Color>,
+    pub font_size: Option<f32>,
+}
+```
+
+Read computed struct when drawing:
+
+```rust
+fn on_draw(&mut self, ...) {
+    let style = self.style_resolver.get_data_clone(ControlState::Normal);
+    let color = style.text_color.unwrap_or(Color::BLACK);
+    let size = style.font_size.unwrap_or(16.0);
+}
+```
+
+## Chain Methods
+
+`{EnumName}ResolverExt` trait provides chain methods for Resolver. Method name is variant name's snake_case form:
+
+```rust
+pub trait LabelStyleResolverExt {
+    fn text_color(self, value: Color) -> Self;
+    fn font_size(self, value: f32) -> Self;
+    fn set_text_color(&mut self, value: Color) -> &mut Self;
+    fn set_font_size(&mut self, value: f32) -> &mut Self;
+}
+```
+
+Usage example:
+
+```rust
+let resolver = LabelStyleResolver::new(view_id)
+    .text_color(Color::RED)
+    .font_size(14.0);
+```
+
+## State Variants
+
+Resolver supports storing different style variants by `ControlState`. Switch current state through `.normal()`, `.hover()`, `.focus()`, `.active()`, `.disabled()`:
+
+```rust
+let resolver = LabelStyleResolver::new(view_id)
+    .normal()
+    .text_color(Color::BLACK)
+    .font_size(16.0)
+    .hover()
+    .text_color(Color::BLUE)
+    .focus()
+    .text_color(Color::RED);
+```
+
+Read by current widget state when drawing:
+
+```rust
+let style = resolver.get_data_clone(control_state);
+```
+
+State inheritance rules:
+
+- `Hover` inherits `Normal` styles, then covers Hover variants
+- `Focus` inherits `Normal` styles, then covers Focus variants
+- `Active` inherits `Normal` and `Focus` styles, then covers Active variants
+- `Disabled` doesn't inherit, only uses Disabled variants
+
+## StyleBuilder
+
+Derive macro by default generates `StyleBuilder` trait implementation for widget, allows application side to modify styles through `.style(...)` method:
+
+```rust
+impl StyleBuilder<LabelStyleResolver> for Label {
+    fn style(mut self, style_fn: impl Fn(LabelStyleResolver) -> LabelStyleResolver) -> Self {
+        self.style = style_fn(self.style);
+        self
+    }
+}
+```
+
+Application side usage:
+
+```rust
+label("Title")
+    .style(|s| s.text_color(Color::RED).font_size(24.0));
+```
+
+`.style(...)` method receives a function, can use ResolverExt's chain methods to modify styles in function.
+
+## Update Enum
+
+Derive macro by default generates `{EnumName}Update` enum and `update_view` method:
+
+```rust
+pub enum LabelStyleUpdate {
+    TextColor(ControlState, Color),
+    FontSize(ControlState, f32),
+}
+
+impl LabelStyle {
+    pub fn update_view<D, F>(
+        resolver: &mut LabelStyleResolver,
+        update: LabelStyleUpdate
+    ) { ... }
+}
+```
+
+`Update` enum contains update type for each style variant, `update_view` method will update corresponding state's style value in Resolver.
+
+## Configuration Parameters
+
+Configure generated content through `#[resolver(...)]` attribute:
+
+### update_view = false
+
+Skip Update enum and update_view method generation:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(update_view = false)]
+pub enum Layout {
+    Display(Display),
+}
+```
+
+Suitable for style types not needing reactive update.
+
+### computed = false
+
+Skip Computed struct generation:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(computed = false, data = taffy::Style)]
+pub enum Layout {
+    Display(Display),
+}
+```
+
+Suitable for directly using external type (like `taffy::Style`) as calculation result.
+
+### computed_fn = false
+
+Skip `computed_xxx` independent function generation. By default, derive macro generates a `pub fn computed_{enum_snake_name}(...)` function, mapping enum's raw style values to `Computed` struct:
+
+```rust
+// Automatically generated function (using LabelStyle as example)
+pub fn computed_label_style(
+    _unit_resolver: &UnitResolver,
+    variants: &ResolverComputeMap<LabelStyleKey, LabelStyle>,
+) -> LabelStyleComputed {
+    let mut computed = LabelStyleComputed::default();
+    for (k, v) in variants.iter() {
+        match k {
+            LabelStyleKey::TextColor => {
+                if let LabelStyle::TextColor(val) = v {
+                    computed.text_color = Some(val.clone());
+                }
+            }
+            LabelStyleKey::FontSize => {
+                if let LabelStyle::FontSize(val) = v {
+                    computed.font_size = Some(val.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    computed
+}
+```
+
+This function will be passed into `new_with_compute_func`:
+
+```rust
+LabelStyleResolver::new_with_compute_func(view_id, computed_label_style)
+```
+
+When don't need to automatically generate compute function, can turn off:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(computed_fn = false)]
+pub enum MyStyle {
+    Value(f32),
+}
+```
+
+> **Note**: `computed_fn = false` usually paired with `computed = false` (like Layout), at this time neither generates `Computed` struct nor compute function. If only turn off `computed_fn` but keep `computed`, then need to manually write compute function.
+
+### data = Type
+
+Specify Resolver's data type, generate type alias:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(data = taffy::Style)]
+pub enum Layout {
+    Display(Display),
+}
+```
+
+Generated `LayoutResolver` will use `taffy::Style` as D generic.
+
+### builder = false
+
+Skip StyleBuilder generation:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(builder = false)]
+pub enum InternalStyle {
+    Value(f32),
+}
+```
+
+Suitable for internal style types, don't need to expose to application side builder.
+
+### default = false
+
+Skip Resolver's Default implementation:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+#[resolver(default = false)]
+pub enum CustomStyle {
+    Value(f32),
+}
+```
+
+## Variant Attributes
+
+### skip_attr
+
+Skip all generation for some variant:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+pub enum Style {
+    Color(Color),
+    #[resolver(skip_attr)]
+    InternalDebug(String),  // Don't generate Key, methods etc
+}
+```
+
+### skip_linkfn
+
+Skip chain method generation, but keep Key and other content:
+
+```rust
+#[derive(Clone, Debug, Resolver)]
+pub enum Layout {
+    #[resolver(skip_linkfn)]
+    Size(Size<Dimension>),  // Don't generate .size() method
+    Display(Display),
+}
+```
+
+## Actual Usage in Widget
+
+Following example shows Resolver's complete usage flow in widget.
+
+### Constructor
+
+Create Resolver when widget constructs, can pass custom calculation function:
+
+```rust
+use flor::view::ViewId;
+use flor::view::resolver::LabelStyleResolver;
+
+pub struct Label {
+    view_id: ViewId,
+    title: String,
+    style: LabelStyleResolver,
+}
+
+impl Label {
+    pub fn new(title: String) -> Self {
+        let view_id = ViewId::new();
+
+        Self {
+            view_id,
+            title,
+            // Use new_with_compute_func to pass calculation function
+            style: LabelStyleResolver::new_with_compute_func(view_id, computed_label_style),
+        }
+    }
+}
+```
+
+`computed_label_style` function is automatically generated by derive macro, it will traverse all style variants and fill `LabelStyleComputed`.
+
+### on_measure
+
+Read style by current widget state when measuring:
+
+```rust
+fn on_measure(
+    &mut self,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<AvailableSpace>,
+    _style: &Style,
+    control_state: ControlState,
+    render: &mut FlorRenderer,
+) -> Result<Size<f32>, Error> {
+    // Get current state's style
+    let computed = self.style.get_data_borrow(control_state);
+
+    // Use style values for measurement
+    let font_size = computed.font_size.unwrap_or(16.0);
+    let font_family = computed.font_family.clone().unwrap_or_default();
+
+    // Create text format and measure
+    let text_format = render.create_text_format(&font_family)?;
+    text_format.set_font_size(font_size);
+
+    let layout_text = render.create_text_layout(self.title.clone(), bounds, text_format)?;
+    let (width, height) = layout_text.measure_text()?;
+
+    Ok(Size { width, height })
+}
+```
+
+`get_data_borrow` returns RwLock's mapping guard, avoids clone overhead. If need multiple accesses or cross-method passing, use `get_data_clone`.
+
+### on_draw
+
+Read style by widget state when drawing too:
+
+```rust
+fn on_draw(
+    &mut self,
+    render: &mut FlorRenderer,
+    control_state: ControlState,
+    abs_location: (f32, f32),
+    layout: ComputedLayout,
+) -> Result<(), Error> {
+    let computed = self.style.get_data_borrow(control_state);
+
+    // Read style values, use unwrap_or to provide default values
+    let text_color = computed.text_color.unwrap_or(Color::BLACK);
+    let font_size = computed.font_size.unwrap_or(16.0);
+
+    // Use style to draw
+    let brush = render.create_solid_color_brush(text_color, None)?;
+    // ...
+}
+```
+
+### on_update_class
+
+`on_update_class` is class system's entry. Widget parses class names and updates styles here:
+
+```rust
+fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error> {
+    // 1. Switch to current state
+    self.style.switch_control_state(control_state);
+
+    // 2. Parse class name and set style
+    let class = class.trim();
+
+    if let Some(rest) = class.strip_prefix("text-") {
+        // text-red-500 -> set color
+        if let Some(color) = parse_color(rest) {
+            self.style.set_text_color(color);
+        }
+        // text-lg -> set font size
+        if let Some(size) = self.style.unit_resolver.parse_tw_font_size(rest) {
+            self.style.set_font_size(size);
+        }
+    }
+
+    if let Some(rest) = class.strip_prefix("bg-") {
+        // bg-blue-500 -> set background
+        if let Some(color) = parse_color(rest) {
+            self.style.set_background(Background::Color(color));
+        }
+    }
+
+    Ok(())
+}
+```
+
+Key steps:
+
+1. `switch_control_state(control_state)` - Switch Resolver to current state
+2. `set_xxx(...)` - Use generated chain methods to set style values
+
+Each class name match success directly returns, if not match then continue trying other rules.
+
+### on_update_state
+
+Handle `LabelStyleUpdate` when reactive update:
+
+```rust
+fn on_update_state(&mut self, state: Box<dyn Any>) {
+    // Try to handle title update
+    if let Ok(title) = state.downcast::<String>() {
+        self.title = *title;
+        return;
+    }
+
+    // Try to handle style update
+    if let Ok(update) = state.downcast::<LabelStyleUpdate>() {
+        // Call macro-generated update_view method
+        LabelStyle::update_view(&mut self.style, *update);
+    }
+}
+```
+
+`LabelStyleUpdate` is automatically generated by derive macro, contains update enum for each style variant. `update_view` method will update corresponding state's style value in Resolver.

@@ -1,0 +1,69 @@
+# Focus Builder
+
+This page only introduces builder methods for configuring focus table. Complete explanation of focus mechanism see [Focus Mechanism](/en/guide/use/focus), runtime APIs for manipulating focus through `ViewId` see [ViewId](/en/guide/control/view-id).
+
+Actually exposed trait is:
+
+```rust
+pub trait FocusIndexBuilder {
+    fn focus_scope(self, focus_scope: u32) -> Self;
+    fn focus_index(self, focus_index: u32) -> Self;
+}
+```
+
+## focus_index
+
+`focus_index` adds widget to focus table, and sets its sort value in Tab order.
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let name = label("Name")
+    .focus_index(0)
+    .on_focus(|_, virtual_index| {
+        println!("focus virtual index: {virtual_index}");
+    });
+
+let confirm = label("Confirm").focus_index(1);
+```
+
+`0` is legal sort value, don't understand it as canceling focus. Smaller numbers are visited by Tab first. Same sort value can also work, final sorting will still include `ViewId` and virtual focus number; however using clear incrementing values for same group of widgets is easier to maintain.
+
+Not writing `focus_index` means not joining focus table. Such widgets won't be selected by Tab, also won't become widget-level [`on_key_*`](/en/api/handler#keyboard-events) focus target.
+
+## focus_scope
+
+`focus_scope` provides a sort offset for current widget and its subtree. It's suitable for splitting page into several areas, letting each area internally number from `0`.
+
+```rust
+use flor::view::builder::FocusIndexBuilder;
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let toolbar = div(views![
+    label("Tool 1").focus_index(0),
+    label("Tool 2").focus_index(1),
+])
+.focus_scope(100);
+
+let content = div(views![
+    label("Content 1").focus_index(0),
+    label("Content 2").focus_index(1),
+])
+.focus_scope(200);
+```
+
+Final sort values above are:
+
+| Widget | Local Writing | Final Sort Value |
+| --- | --- | --- |
+| Tool 1 | `100 + 0` | `100` |
+| Tool 2 | `100 + 1` | `101` |
+| Content 1 | `200 + 0` | `200` |
+| Content 2 | `200 + 1` | `201` |
+
+`focus_scope` can nest, parent offset will continue accumulating to subtree.
+
+Note: builder's `focus_scope(u32)` only affects sorting, doesn't limit Tab's runtime range. Popup layer, Modal这类 focus isolation scenarios use `ViewId::push_focus_scope()` and `ViewId::pop_focus_scope()`, mechanism explanation see [Focus Mechanism](/en/guide/use/focus#runtime-scope).

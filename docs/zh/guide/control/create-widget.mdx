@@ -1,0 +1,826 @@
+# 从零开发一个 Switch 控件
+
+本章我们将从零开始，完整实现一个 `Switch`（开关）控件。通过这个过程，你会掌握控件开发的所有核心环节：定义样式枚举、实现 `View` trait、绘制、测量、支持原子类、响应鼠标事件。
+
+`Switch` 是一个合适的学习案例：它有"开/关"两种状态，需要绘制轨道和滑块，需要响应点击，还能通过原子类定制颜色和尺寸。学完这一章，你就可以按照同样的模式开发自己的控件了。
+
+## 最终效果预览
+
+```rust
+use flor_lys::switch::switch;
+
+let enabled = create_signal(false);
+
+// 使用原子类定制样式
+switch(enabled).class("switch-track-blue switch-size-md");
+
+// 使用 style builder 定制样式
+switch(enabled)
+    .style(|s| s
+        .track_color(Color::GREEN)
+        .thumb_color(Color::WHITE)
+    );
+```
+
+---
+
+## 第一步：创建文件
+
+在你的控件库 crate 中新建文件：
+
+```
+flor-lys/crates/flor-lys/src/switch.rs
+```
+
+并在 `lib.rs` 中注册：
+
+```rust
+pub mod switch;
+```
+
+---
+
+## 第二步：定义样式枚举
+
+使用 `#[derive(Resolver)]` 定义 `Switch` 支持的样式属性。派生宏会自动生成 `SwitchStyleKey`、`SwitchStyleResolver`、`SwitchStyleComputed` 等辅助类型。
+
+```rust
+use flor::macros::Resolver;
+use flor::types::Color;
+
+/// Switch 样式枚举
+///
+/// 每个变体对应一个可配置的样式属性。
+/// #[derive(Resolver)] 自动为你生成：
+/// - SwitchStyleKey       — 属性键枚举
+/// - SwitchStyleResolver  — 解析器类型别名
+/// - SwitchStyleComputed  — 计算后的样式值结构体
+/// - SwitchStyleResolverExt  — 链式方法 trait
+#[derive(Clone, Debug, Resolver)]
+pub enum SwitchStyle {
+    /// 轨道颜色（开启状态）
+    TrackColor(Color),
+    /// 轨道颜色（关闭状态）
+    TrackOffColor(Color),
+    /// 滑块颜色
+    ThumbColor(Color),
+    /// 滑块颜色（悬浮状态）
+    ThumbHoverColor(Color),
+    /// 开关宽度
+    Width(f32),
+    /// 开关高度
+    Height(f32),
+    /// 圆角半径
+    CornerRadius(f32),
+    /// 透明度
+    Opacity(f32),
+}
+```
+
+**要点**：
+- 每个变体携带一个具体类型，`Resolver` 宏会为每个变体生成对应的链式方法。
+- 变体名用 `PascalCase`，生成的方法名会自动转为 `snake_case`（如 `TrackColor` → `.track_color(...)`）。
+- 变体中的类型会被包装为 `Option<T>` 放入 `Computed` 结构体。
+
+---
+
+## 第三步：定义控件结构体
+
+```rust
+use flor::view::ViewId;
+use flor::signal::RwSignal;
+
+/// Switch 控件
+///
+/// 包含一个 bool 信号来控制开/关状态。
+/// 所有开关都持有自己的 style resolver。
+#[derive(Debug)]
+pub struct Switch {
+    /// 控件唯一 ID，框架通过它管理控件树
+    view_id: ViewId,
+    /// 当前开/关状态（由 create_updater 响应式更新）
+    enabled: bool,
+    /// 开/关状态的信号引用（用于写入）
+    enabled_signal: RwSignal<bool>,
+    /// 样式解析器
+    style: SwitchStyleResolver,
+}
+```
+
+**关键设计**：
+- `enabled: bool` 是当前值的快照，由 `create_updater` 建立的响应式依赖自动保持同步。
+- `enabled_signal: RwSignal<bool>` 保留信号引用，用于在 `on_button_down` 中写入新值。
+- 这种拆分是 Flor 的推荐模式：读取用值，写入用信号；当外部修改信号时，`create_updater` 会自动触发 `on_update_state` 更新 `enabled` 字段。
+
+---
+
+## 第四步：实现 View trait
+
+### 4.1 必须实现的方法
+
+```rust
+use flor::view::{View, ControlState};
+
+impl View for Switch {
+    fn view_id(&self) -> ViewId {
+        // 直接返回结构体里的 view_id，不要在这里创建新 ID
+        self.view_id
+    }
+
+    fn tag(&self) -> &str {
+        // 调试标识，暂时按控件名返回即可
+        "Switch"
+    }
+}
+```
+
+### 4.2 on_update_state — 响应式更新
+
+当外部通过信号更新样式或状态时，框架会调用 `on_update_state`。你需要 downcast 并更新内部字段：
+
+```rust
+use std::any::Any;
+
+impl View for Switch {
+    // ... view_id, tag ...
+
+    fn on_update_state(&mut self, state: Box<dyn Any>) {
+        // 先处理 enabled 状态更新（由 create_updater 触发）
+        if let Ok(value) = state.downcast::<bool>() {
+            self.enabled = *value;
+            return;
+        }
+        // 处理样式更新（SwitchStyleUpdate 由 Resolver 宏自动生成）
+        if let Ok(update) = state.downcast::<SwitchStyleUpdate>() {
+            SwitchStyle::update_view(&mut self.style, *update);
+        }
+    }
+}
+```
+
+> **响应式原理**：构造函数中使用 `create_updater` 注册了 `bool` 的更新回调。当外部代码修改 `enabled` 信号（如 `enabled.set(true)`）时，`create_updater` 会检测到变化，自动调用 `view_id.update_state(Box::new(new_value))`，最终触发这里的 `on_update_state`。不需要手动传递信号给控件。
+
+### 4.3 on_measure — 测量
+
+`on_measure` 告诉布局系统这个控件需要多大的空间。对于 `Switch`，尺寸主要由样式决定：
+
+```rust
+use flor::error::Error;
+use flor::render::FlorRenderer;
+use flor::taffy::{AvailableSpace, Size, Style};
+
+impl View for Switch {
+    // ...
+
+    fn on_measure(
+        &mut self,
+        known_dimensions: Size<Option<f32>>,
+        _available_space: Size<AvailableSpace>,
+        _style: &Style,
+        control_state: ControlState,
+        _render: &mut FlorRenderer,
+    ) -> Result<Size<f32>, Error> {
+        let computed = self.style.get_data_borrow(control_state);
+
+        // 默认尺寸
+        let width = computed.width.unwrap_or(44.0);
+        let height = computed.height.unwrap_or(24.0);
+
+        Ok(Size {
+            width: known_dimensions.width.unwrap_or(width),
+            height: known_dimensions.height.unwrap_or(height),
+        })
+    }
+}
+```
+
+**要点**：
+- `known_dimensions` 是父容器传下来的已知尺寸约束。如果父容器设了固定宽高，这里会收到 `Some(...)`。
+- 优先使用 `known_dimensions`，没有时才用控件自己的默认值。
+- `self.style.get_data_borrow(control_state)` 获取当前控件状态下的计算样式。
+
+### 4.4 on_draw — 绘制
+
+这是控件开发中最核心的方法。`Switch` 需要绘制轨道（背景）和滑块（圆形）：
+
+```rust
+use flor::base::graphics::RenderContext;
+use flor::view::resolver::ComputedLayout;
+
+impl View for Switch {
+    // ...
+
+    fn on_draw(
+        &mut self,
+        render: &mut FlorRenderer,
+        control_state: ControlState,
+        abs_location: (f32, f32),
+        layout: ComputedLayout,
+    ) -> Result<(), Error> {
+        let x = abs_location.0;
+        let y = abs_location.1;
+        let w = layout.size.width;
+        let h = layout.size.height;
+
+        let computed = self.style.get_data_borrow(control_state);
+
+        let is_on = self.enabled;
+
+        // 轨道颜色：根据开/关状态选择
+        let track_color = if is_on {
+            computed.track_color.unwrap_or_else(|| {
+                Color::from_hex_str("#3b82f6").unwrap_or_default()
+            })
+        } else {
+            computed.track_off_color.unwrap_or_else(|| {
+                Color::from_hex_str("#d1d5db").unwrap_or_default()
+            })
+        };
+
+        let corner_radius = computed.corner_radius.unwrap_or(h / 2.0);
+        let opacity = computed.opacity.unwrap_or(1.0);
+
+        // 绘制轨道
+        let track_brush = render.create_solid_color_brush(
+            track_color.with_alpha((255.0 * opacity) as u8),
+            None,
+        )?;
+        render.fill_quad(x, y, w, h, &track_brush, Some(corner_radius), None)?;
+
+        // 计算滑块位置
+        let thumb_size = h - 4.0; // 上下各留 2px
+        let thumb_x = if is_on {
+            x + w - thumb_size - 3.0
+        } else {
+            x + 3.0
+        };
+        let thumb_y = y + 2.0;
+
+        // 滑块颜色：悬浮时使用 hover 颜色
+        let thumb_color = if control_state == ControlState::Hover {
+            computed
+                .thumb_hover_color
+                .unwrap_or_else(|| Color::from_hex_str("#f3f4f6").unwrap_or_default())
+        } else {
+            computed
+                .thumb_color
+                .unwrap_or_else(|| Color::WHITE)
+        };
+
+        let thumb_brush = render.create_solid_color_brush(
+            thumb_color.with_alpha((255.0 * opacity) as u8),
+            None,
+        )?;
+        render.fill_quad(
+            thumb_x,
+            thumb_y,
+            thumb_size,
+            thumb_size,
+            &thumb_brush,
+            Some(thumb_size / 2.0), // 圆形
+            None,
+        )?;
+
+        Ok(())
+    }
+}
+```
+
+**绘制要点**：
+- 使用传入的 `abs_location`（绝对坐标）和 `layout.size`（布局尺寸），不要重新推导。
+- 从 `computed` 中读取样式值，用 `unwrap_or` 提供默认值。
+- 根据 `control_state` 绘制不同状态（常规 vs 悬浮 vs 禁用）。
+- 圆角值 `h / 2.0` 可以做出"胶囊"形状。
+- 滑块用 `thumb_size / 2.0` 作为圆角半径，做出圆形。
+
+### 4.5 on_update_class — 原子类支持
+
+让用户可以通过 `.class("switch-track-blue")` 设置样式：
+
+```rust
+use flor::view::resolver::parse_color;
+
+impl View for Switch {
+    // ...
+
+    fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error> {
+        // 切换到对应状态的样式层
+        self.style.switch_control_state(control_state);
+
+        let class = class.trim();
+
+        // 1. 轨道颜色（开启状态）：switch-track-{color}
+        if let Some(rest) = class.strip_prefix("switch-track-") {
+            if let Some(color) = parse_color(rest) {
+                self.style.set_track_color(color);
+                return Ok(());
+            }
+        }
+
+        // 2. 轨道颜色（关闭状态）：switch-track-off-{color}
+        if let Some(rest) = class.strip_prefix("switch-track-off-") {
+            if let Some(color) = parse_color(rest) {
+                self.style.set_track_off_color(color);
+                return Ok(());
+            }
+        }
+
+        // 3. 滑块颜色：switch-thumb-{color}
+        if let Some(rest) = class.strip_prefix("switch-thumb-") {
+            if let Some(color) = parse_color(rest) {
+                self.style.set_thumb_color(color);
+                return Ok(());
+            }
+        }
+
+        // 4. 尺寸：switch-size-{sm|md|lg}
+        match class {
+            "switch-size-sm" => {
+                self.style.set_width(36.0);
+                self.style.set_height(20.0);
+                return Ok(());
+            }
+            "switch-size-md" => {
+                self.style.set_width(44.0);
+                self.style.set_height(24.0);
+                return Ok(());
+            }
+            "switch-size-lg" => {
+                self.style.set_width(52.0);
+                self.style.set_height(28.0);
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+}
+```
+
+**原子类解析要点**：
+- 先用 `switch_control_state(control_state)` 切换到当前状态层，这样后续的 `set_*` 调用会写入正确的状态。
+- 用 `strip_prefix` 匹配类名前缀，然后用 `parse_color` 等共享解析方法。
+- 解析成功后直接 `return Ok(())`，不要让后续规则意外匹配。
+- 不认识的类名直接忽略，`on_update_class` 会被多次调用，每次只处理一个类名。
+
+### 4.6 on_button_down — 响应点击
+
+`Switch` 被点击时切换状态：
+
+```rust
+use flor::base::platform::{HandleResult, KeyState, MousePosition};
+
+impl View for Switch {
+    // ...
+
+    fn on_button_down(
+        &mut self,
+        key_state: KeyState,
+        mouse_position: MousePosition,
+    ) -> Result<HandleResult, Error> {
+        // 切换开关状态：通过信号写入，会触发 create_updater 回调
+        self.enabled_signal.set(!self.enabled);
+        Ok(HandleResult::Handled)
+    }
+}
+```
+
+> 这里也可以用 `on_click`。区别在于 `on_click` 要求 down 和 up 命中同一个控件，`on_button_down` 在按下时立即触发。对于开关，`on_button_down` 体验更即时。
+
+---
+
+## 第五步：构造函数与工厂函数
+
+```rust
+use flor::signal::{RwSignal, create_updater};
+use flor::view::resolver::LayoutResolver;
+use flor::view::builder::ViewBuilder;
+
+impl Switch {
+    /// 创建开关控件
+    pub fn new(enabled: RwSignal<bool>) -> Self {
+        // 创建 ViewId，同时创建 LayoutResolver
+        let view_id = ViewId::new_with_layout(|view_id| {
+            LayoutResolver::new(view_id)
+        });
+
+        // 建立响应式依赖：当 enabled 信号变化时，自动调用 on_update_state
+        let enabled_value = create_updater(
+            move || enabled.get(),
+            move |v: bool| view_id.update_state(Box::new(v)),
+        );
+
+        Self {
+            view_id,
+            enabled: enabled_value,
+            enabled_signal: enabled,
+            // computed_switch_style 由 #[derive(Resolver)] 宏自动生成
+            style: SwitchStyleResolver::new_with_compute_func(view_id, computed_switch_style),
+        }
+    }
+}
+
+/// 工厂函数：创建 Switch
+#[inline]
+pub fn switch(enabled: RwSignal<bool>) -> Switch {
+    Switch::new(enabled)
+}
+```
+
+**构造函数要点**：
+- `ViewId::new_with_layout` 为控件创建 `LayoutResolver`。
+- `create_updater` 是关键：它接收两个闭包——第一个读取信号值（建立响应式追踪），第二个在值变化时通过 `view_id.update_state` 触发 `on_update_state`。返回值是信号的当前值，存储为 `enabled: bool`。
+- `enabled_signal` 保留信号引用，用于 `on_button_down` 中的写入操作。
+- `computed_switch_style` 函数由 `#[derive(Resolver)]` 宏自动生成，你**不需要手动编写**。
+
+---
+
+## 第六步：理解 compute 函数（宏自动生成）
+
+`#[derive(Resolver)]` 宏默认会自动生成一个 `computed_switch_style` 函数，它负责将枚举的原始样式值映射到 `Computed` 结构体。你不需要手动编写它，宏已经为你生成了等效于下面的代码：
+
+```rust
+// 以下由 #[derive(Resolver)] 自动生成，这里仅展示效果
+pub fn computed_switch_style(
+    _unit_resolver: &UnitResolver,
+    variants: &ResolverComputeMap<SwitchStyleKey, SwitchStyle>,
+) -> SwitchStyleComputed {
+    let mut computed = SwitchStyleComputed::default();
+    for (k, v) in variants.iter() {
+        match k {
+            SwitchStyleKey::TrackColor => {
+                if let SwitchStyle::TrackColor(val) = v {
+                    computed.track_color = Some(val.clone());
+                }
+            }
+            SwitchStyleKey::TrackOffColor => {
+                if let SwitchStyle::TrackOffColor(val) = v {
+                    computed.track_off_color = Some(val.clone());
+                }
+            }
+            // ... 其他变体同理
+            _ => {}
+        }
+    }
+    computed
+}
+```
+
+**关键点**：
+- 宏生成的 compute 函数名规则是 `computed_{EnumName的snake_case}`（如 `LabelStyle` → `computed_label_style`）。
+- 它只做简单的 `clone` 映射，不处理单位转换。单位的 px 转换由 `Resoled` 的 `get_data_borrow` 内部处理。
+- 如果不需要这个函数，可以通过 `#[resolver(computed_fn = false)]` 关闭。详见 [Resolver 派生宏](/zh/guide/control/resolver/resolver-derive#computed_fn--false) 文档。
+
+---
+
+## 完整文件一览
+
+下面是 `switch.rs` 的完整代码：
+
+```rust
+use flor::base::graphics::RenderContext;
+use flor::base::platform::{HandleResult, KeyState, MousePosition};
+use flor::error::Error;
+use flor::macros::Resolver;
+use flor::render::FlorRenderer;
+use flor::signal::{RwSignal, create_updater};
+use flor::taffy::{AvailableSpace, Size, Style};
+use flor::types::Color;
+use flor::view::builder::ViewBuilder;
+use flor::view::resolver::{ComputedLayout, LayoutResolver, parse_color};
+use flor::view::{ControlState, View, ViewId};
+use std::any::Any;
+
+// ============================================================================
+// SwitchStyle 样式枚举
+// ============================================================================
+
+#[derive(Clone, Debug, Resolver)]
+pub enum SwitchStyle {
+    TrackColor(Color),
+    TrackOffColor(Color),
+    ThumbColor(Color),
+    ThumbHoverColor(Color),
+    Width(f32),
+    Height(f32),
+    CornerRadius(f32),
+    Opacity(f32),
+}
+
+// ============================================================================
+// Switch 结构体
+// ============================================================================
+
+#[derive(Debug)]
+pub struct Switch {
+    view_id: ViewId,
+    /// 当前状态值（由 create_updater 响应式更新）
+    enabled: bool,
+    /// 信号引用（用于写入）
+    enabled_signal: RwSignal<bool>,
+    style: SwitchStyleResolver,
+}
+
+// ============================================================================
+// View trait 实现
+// ============================================================================
+
+impl View for Switch {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn tag(&self) -> &str {
+        "Switch"
+    }
+
+    fn on_update_state(&mut self, state: Box<dyn Any>) {
+        // 处理 enabled 状态更新（由 create_updater 触发）
+        if let Ok(value) = state.downcast::<bool>() {
+            self.enabled = *value;
+            return;
+        }
+        // 处理样式更新
+        if let Ok(update) = state.downcast::<SwitchStyleUpdate>() {
+            SwitchStyle::update_view(&mut self.style, *update);
+        }
+    }
+
+    fn on_measure(
+        &mut self,
+        known_dimensions: Size<Option<f32>>,
+        _available_space: Size<AvailableSpace>,
+        _style: &Style,
+        control_state: ControlState,
+        _render: &mut FlorRenderer,
+    ) -> Result<Size<f32>, Error> {
+        let computed = self.style.get_data_borrow(control_state);
+        let width = computed.width.unwrap_or(44.0);
+        let height = computed.height.unwrap_or(24.0);
+        Ok(Size {
+            width: known_dimensions.width.unwrap_or(width),
+            height: known_dimensions.height.unwrap_or(height),
+        })
+    }
+
+    fn on_draw(
+        &mut self,
+        render: &mut FlorRenderer,
+        control_state: ControlState,
+        abs_location: (f32, f32),
+        layout: ComputedLayout,
+    ) -> Result<(), Error> {
+        let x = abs_location.0;
+        let y = abs_location.1;
+        let w = layout.size.width;
+        let h = layout.size.height;
+
+        let computed = self.style.get_data_borrow(control_state);
+        let is_on = self.enabled;
+
+        let track_color = if is_on {
+            computed
+                .track_color
+                .unwrap_or_else(|| Color::from_hex_str("#3b82f6").unwrap_or_default())
+        } else {
+            computed
+                .track_off_color
+                .unwrap_or_else(|| Color::from_hex_str("#d1d5db").unwrap_or_default())
+        };
+
+        let corner_radius = computed.corner_radius.unwrap_or(h / 2.0);
+        let opacity = computed.opacity.unwrap_or(1.0);
+
+        let track_brush = render.create_solid_color_brush(
+            track_color.with_alpha((255.0 * opacity) as u8),
+            None,
+        )?;
+        render.fill_quad(x, y, w, h, &track_brush, Some(corner_radius), None)?;
+
+        let thumb_size = h - 4.0;
+        let thumb_x = if is_on {
+            x + w - thumb_size - 3.0
+        } else {
+            x + 3.0
+        };
+        let thumb_y = y + 2.0;
+
+        let thumb_color = if control_state == ControlState::Hover {
+            computed
+                .thumb_hover_color
+                .unwrap_or_else(|| Color::from_hex_str("#f3f4f6").unwrap_or_default())
+        } else {
+            computed.thumb_color.unwrap_or(Color::WHITE)
+        };
+
+        let thumb_brush = render.create_solid_color_brush(
+            thumb_color.with_alpha((255.0 * opacity) as u8),
+            None,
+        )?;
+        render.fill_quad(
+            thumb_x,
+            thumb_y,
+            thumb_size,
+            thumb_size,
+            &thumb_brush,
+            Some(thumb_size / 2.0),
+            None,
+        )?;
+
+        Ok(())
+    }
+
+    fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error> {
+        self.style.switch_control_state(control_state);
+        let class = class.trim();
+
+        if let Some(rest) = class.strip_prefix("switch-track-") {
+            if let Some(color) = parse_color(rest) {
+                self.style.set_track_color(color);
+                return Ok(());
+            }
+        }
+
+        if let Some(rest) = class.strip_prefix("switch-track-off-") {
+            if let Some(color) = parse_color(rest) {
+                self.style.set_track_off_color(color);
+                return Ok(());
+            }
+        }
+
+        if let Some(rest) = class.strip_prefix("switch-thumb-") {
+            if let Some(color) = parse_color(rest) {
+                self.style.set_thumb_color(color);
+                return Ok(());
+            }
+        }
+
+        match class {
+            "switch-size-sm" => {
+                self.style.set_width(36.0);
+                self.style.set_height(20.0);
+                return Ok(());
+            }
+            "switch-size-md" => {
+                self.style.set_width(44.0);
+                self.style.set_height(24.0);
+                return Ok(());
+            }
+            "switch-size-lg" => {
+                self.style.set_width(52.0);
+                self.style.set_height(28.0);
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn on_button_down(
+        &mut self,
+        _key_state: KeyState,
+        _mouse_position: MousePosition,
+    ) -> Result<HandleResult, Error> {
+        self.enabled_signal.set(!self.enabled);
+        Ok(HandleResult::Handled)
+    }
+}
+
+// ============================================================================
+// 构造函数与工厂函数
+// ============================================================================
+
+impl Switch {
+    pub fn new(enabled: RwSignal<bool>) -> Self {
+        let view_id = ViewId::new_with_layout(|view_id| LayoutResolver::new(view_id));
+
+        let enabled_value = create_updater(
+            move || enabled.get(),
+            move |v: bool| view_id.update_state(Box::new(v)),
+        );
+
+        Self {
+            view_id,
+            enabled: enabled_value,
+            enabled_signal: enabled,
+            style: SwitchStyleResolver::new_with_compute_func(view_id, computed_switch_style),
+        }
+    }
+}
+
+#[inline]
+pub fn switch(enabled: RwSignal<bool>) -> Switch {
+    Switch::new(enabled)
+}
+```
+
+---
+
+## 使用示例
+
+### 基础用法
+
+```rust
+use flor::signal::create_signal;
+use flor_lys::switch::switch;
+
+let notifications = create_signal(false);
+
+switch(notifications);
+```
+
+### 配合原子类
+
+```rust
+switch(notifications)
+    .class("switch-track-blue switch-size-lg");
+```
+
+### 配合信号联动
+
+```rust
+let dark_mode = create_signal(false);
+
+// 其他控件可以读取 dark_mode 信号来响应
+let bg_color = move || {
+    if dark_mode.get() {
+        Color::from_hex_str("#1a1a2e").unwrap()
+    } else {
+        Color::WHITE
+    }
+};
+
+let panel = div(views![
+    label("深色模式"),
+    switch(dark_mode).class("switch-track-purple"),
+])
+.class("flex items-center gap-3 p-4");
+```
+
+### 配合 style builder
+
+```rust
+switch(dark_mode)
+    .style(|s| s
+        .track_color(Color::GREEN)
+        .track_off_color(Color::GRAY)
+        .thumb_color(Color::WHITE)
+    );
+```
+
+---
+
+## 开发控件 checklist
+
+回顾整个流程，开发一个 Flor 控件需要完成以下步骤：
+
+1. **定义样式枚举** — 使用 `#[derive(Resolver)]` 声明所有可配置的样式属性。
+2. **定义控件结构体** — 持有 `view_id`、状态字段和 `style resolver`。
+3. **实现 `View` trait**：
+   - `view_id()` — 返回结构体中的 `view_id`。
+   - `tag()` — 返回调试用的标签名。
+   - `on_update_state()` — 处理 `update_state` 传入的样式更新。
+   - `on_measure()` — 有自然尺寸的控件需要实现，返回控件需要的尺寸。
+   - `on_draw()` — 核心绘制方法，读取 computed 样式和控件状态来绘制。
+   - `on_update_class()` — 解析原子类字符串，转换为样式更新。
+   - 按需覆盖鼠标/键盘事件处理（`on_button_down`、`on_click` 等）。
+4. **编写构造函数** — 创建 `ViewId`、`LayoutResolver`、`StyleResolver`，使用 `create_updater` 建立响应式依赖，`computed_xxx` 函数由宏自动生成。
+5. **编写工厂函数** — 提供简洁的 API 入口。
+
+---
+
+## 进阶话题
+
+### 添加动画
+
+如果你想给滑块添加平移动画，可以在 `on_frame` 中实现：
+
+```rust
+fn on_frame(&mut self, now: Instant) -> Result<Option<Duration>, Error> {
+    let target_x = if self.enabled { /* 开启位置 */ } else { /* 关闭位置 */ };
+    // 计算当前过渡位置
+    // 如果位置还在变化，返回 Some(Duration) 请求下一帧
+    // 如果已经到达目标，返回 None
+}
+```
+
+### 支持禁用状态
+
+在 `on_draw` 中检查 `ControlState::Disabled`，绘制灰色轨道和半透明滑块。在 `on_button_down` 中检查 `self.view_id.control_state() == ControlState::Disabled` 并忽略点击。
+
+### 扩大点击热区
+
+如果你的滑块太小不好点，覆盖 `on_hit_test` 来扩大命中区域：
+
+```rust
+fn on_hit_test(&self, mouse_position: MousePosition, _key_state: KeyState) -> bool {
+    // 在布局矩形的基础上扩大 4px
+    let padding = 4.0;
+    mouse_position.x >= -padding
+        && mouse_position.x <= self.layout_width() + padding
+        && mouse_position.y >= -padding
+        && mouse_position.y <= self.layout_height() + padding
+}
+```

@@ -1,0 +1,171 @@
+## Window Creation and Control
+
+Windows are created by `WindowOption`, returning the current window's `WindowId` after successful creation.
+
+```rust
+use flor::windows::WindowOption;
+use flor_lys::label::label;
+
+let window_id = WindowOption {
+    title: "Hello Flor".to_string(),
+    width: 800,
+    height: 600,
+    ..WindowOption::default()
+}
+.open(move |_window_id| {
+    label("hello flor ~")
+})?;
+```
+
+`WindowOption` handles window's initial configuration:
+
+```rust
+pub struct WindowOption {
+    pub title: String,
+    pub width: u32,
+    pub height: u32,
+    pub rem_px: f32,
+    pub wait_v_sync: bool,
+    pub show_fps: bool,
+    pub continuous_rendering: bool,
+    pub background_color: Color,
+    pub tooltip_delay: Duration,
+}
+```
+
+Default values:
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `title` | `"Window"` | Window title. |
+| `width` | `800` | Initial window width. |
+| `height` | `600` | Initial window height. |
+| `rem_px` | `16.0` | Pixel value corresponding to `1rem` in current window. |
+| `wait_v_sync` | `true` | Whether rendering backend waits for vertical sync. |
+| `show_fps` | `false` | Whether to show FPS. |
+| `continuous_rendering` | `false` | Whether to continuously request redraw. |
+| `background_color` | `Color::rgb(255, 255, 255)` | Window background color. |
+| `tooltip_delay` | `Duration::from_millis(500)` | Tooltip response delay. |
+
+`continuous_rendering` only controls whether event loop continuously triggers redraw, doesn't change Flor's interface model. Regular GUI applications keep default value; animation, real-time preview, game loop etc. scenarios needing per-frame refresh set to `true`.
+
+## open's View Function
+
+`open` signature is:
+
+```rust
+pub fn open<F, V>(self, view_fn: F) -> Result<WindowId, Error>
+where
+    F: Fn(WindowId) -> V + Send + Sync + 'static,
+    V: IntoViewIter,
+```
+
+`view_fn` is the window root view's build function. After Flor creates platform window, renderer and window entry, it passes current window's `WindowId` to it, and converts return value to window root widget tree.
+
+```rust
+use flor::platform::WindowId;
+use flor::view::View;
+use flor_lys::label::label;
+
+fn build_view(_window_id: WindowId) -> impl View {
+    label("hello flor ~")
+}
+
+WindowOption::default().open(build_view)?;
+```
+
+If you don't need to use window ID, write it as `_window_id`.
+
+## How to Use WindowId in open Parameter
+
+The `window_id` in `open(move |window_id| { ... })` is not recommended to directly call window control methods during root view build phase. At this time window is completing initialization, Flor is still mounting root view, registering renderer, initializing focus and refreshing layout; directly calling `set_size`, `set_window_mode`, `request_redraw`, `destroy` etc. in this closure easily makes initialization order超出预期, producing extra redraw, layout state inconsistency or platform layer behavior issues.
+
+This `WindowId` is more suitable for being captured into widget events, used to control current window in subsequent events:
+
+```rust
+use flor::platform::base::WindowApi;
+use flor::view::builder::EventBuilder;
+use flor_lys::button::button;
+
+WindowOption::default().open(move |window_id| {
+    button("Close Window").on_click(move |_, _, _| {
+        let _ = window_id.destroy();
+    })
+})?;
+```
+
+If just setting initial title, size, background color, refresh mode, should prioritize writing in `WindowOption` fields, not changing in `open`'s closure.
+
+## WindowId
+
+`WindowId` is platform window's handle wrapper. In current Windows platform implementation it's:
+
+```rust
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct WindowId(pub isize);
+```
+
+It implements `WindowApi` and `WindowOperations`. Need to import trait when calling these methods:
+
+```rust
+use flor::platform::base::{WindowApi, WindowOperations};
+use flor::platform::WindowId;
+```
+
+### Creation and Lifecycle
+
+| API | Purpose | Usage Suggestion |
+| --- | --- | --- |
+| `WindowOption::open(view_fn)` | Create Flor window and mount root view. | Application side prioritize using this entry. |
+| `WindowApi::create_window(title, width, height)` | Only create platform window. | Framework internal use; regular applications shouldn't bypass `WindowOption::open`. |
+| `update_window()` | Synchronously trigger platform window update. | Initialization flow internally calls; application side usually doesn't manually call. |
+| `destroy()` | Destroy window. | Suitable to call in button click, menu command etc. events. |
+
+### Display and Window Mode
+
+| API | Purpose |
+| --- | --- |
+| `show()` | Show window. |
+| `hide()` | Hide window. |
+| `set_window_mode(mode)` | Set window mode. |
+| `get_window_mode()` | Read current window mode. |
+
+`WindowMode` includes `Normal`, `Minimized`, `Maximized`, `Fullscreen`. In current Windows implementation, `Fullscreen` is暂时 treated as maximized.
+
+### Position and Size
+
+| API | Purpose |
+| --- | --- |
+| `get_left()` / `get_top()` | Read window top-left screen coordinates. |
+| `set_left(left)` / `set_top(top)` | Set window horizontal or vertical position separately. |
+| `set_position((x, y))` | Set window position simultaneously. |
+| `get_width()` / `get_height()` | Read entire window width/height. |
+| `set_width(width)` / `set_height(height)` | Set window width or height separately. |
+| `set_size((width, height))` | Set window size simultaneously. |
+| `get_client_size()` | Read client area size. |
+| `get_client_rect()` | Read client area rectangle on screen. |
+| `get_window_rect()` | Read entire window rectangle on screen. |
+
+Position uses `i32`, allowing negative coordinates in multi-monitor environments; size uses `u32`.
+
+### DPI, IME and Mouse
+
+| API | Purpose |
+| --- | --- |
+| `get_scale_factor()` | Read DPI scaling factor; current Windows implementation is still `todo!()`, don't call in application side. |
+| `get_dpi()` | Read window DPI. |
+| `set_ime_window_location(rect)` | Set IME candidate window position. |
+| `set_ime_open_state(is_open)` | Open or close IME state. |
+| `set_ime_allowed(allow)` | Allow or disable IME. |
+| `set_cursor(cursor)` | Set current cursor. |
+| `drag_window()` | Trigger system window drag. |
+| `capture_mouse()` | Capture mouse. |
+| `release_mouse()` | Release mouse capture. |
+
+### Redraw
+
+| API | Purpose |
+| --- | --- |
+| `request_redraw()` | Asynchronously request window redraw. |
+
+Regular widget state changes are automatically requested for redraw by Flor. Only when you directly change external state through window or platform capabilities that framework can't感知, need to manually call `request_redraw()`.

@@ -1,0 +1,71 @@
+# 系统托盘
+
+`tray` feature 用来启用系统托盘图标能力。启用后可以添加、更新、删除托盘图标，并接收托盘图标上的鼠标事件。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "tray"] }
+```
+
+## 基本写法
+
+托盘能力通过 `FlorGui` 暴露。`FlorGui.init()?` 会初始化托盘所需的内部窗口。
+
+```rust
+use flor::base::platform::{IconSource, TrayEvent, TrayOptions};
+use flor::FlorGui;
+
+FlorGui.init()?;
+
+FlorGui.tray_on_callback(|tray_id, event| {
+    println!("tray {tray_id:?}: {event:?}");
+});
+
+let tray_id = FlorGui.tray_add(&TrayOptions {
+    icon_path: Some(IconSource::from_path("app.ico".into())),
+    tooltip: "Flor".to_string(),
+})?;
+```
+
+## 相关类型
+
+托盘功能会用到这些类型：
+
+| 类型 | 用途 |
+| --- | --- |
+| `TrayOptions` | 创建或更新托盘图标时传入的配置。当前包含 `icon_path` 和 `tooltip`。 |
+| `IconSource` | 图标来源，可以来自磁盘文件，也可以来自 RGBA 像素数据。 |
+| `TrayId` | `tray_add(...)` 返回的托盘图标 ID，后续更新、删除和事件回调都会用到它。 |
+| `TrayEvent` | 托盘图标触发的鼠标事件。 |
+| `MouseButton` | `TrayEvent` 里携带的鼠标按键，包含 `Left`、`Right`、`Middle`。 |
+
+`TrayEvent` 当前包括：
+
+| 值 | 含义 |
+| --- | --- |
+| `TrayEvent::MouseDown(button)` | 鼠标按键按下。 |
+| `TrayEvent::MouseUp(button)` | 鼠标按键松开。 |
+| `TrayEvent::MouseDoubleClick(button)` | 鼠标双击。 |
+| `TrayEvent::MouseEnter` | 鼠标进入托盘图标区域。 |
+| `TrayEvent::MouseLeave` | 鼠标离开托盘图标区域。 |
+| `TrayEvent::MouseMove` | 鼠标在托盘图标上移动。 |
+
+## 图标来源
+
+托盘图标通过 `IconSource` 指定：
+
+| 写法 | 用途 |
+| --- | --- |
+| `IconSource::from_path(path)` | 从磁盘加载图标文件。Windows 当前适合传 `.ico`。 |
+| `IconSource::from_raw(width, height, rgba_data)` | 从 RGBA 像素数据创建图标。 |
+
+更新和删除：
+
+```rust
+FlorGui.tray_update(tray_id, &TrayOptions {
+    icon_path: None,
+    tooltip: "新的提示文字".to_string(),
+})?;
+
+FlorGui.tray_remove(tray_id)?;
+```

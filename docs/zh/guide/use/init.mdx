@@ -1,0 +1,18 @@
+## 初始化与消息循环
+
+因为任何平台的`gui`都无法脱离消息循环和一些功能/API注册，所以初始化和事件循环方法不可少。
+
+```rust
+use flor::{FlorGui, views};
+
+fn main() -> Result<(), Box<dyn Error>> {
+    // 初始化，以及注册一些东西
+    FlorGui.init()?;
+
+    // 省略窗口创建及业务代码
+
+    // 进入事件循环，这个方法会阻塞
+    FlorGui.event_loop()?;
+    Ok(())
+}
+```

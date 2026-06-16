@@ -1,0 +1,177 @@
+# 事件 Builder
+
+事件 Builder 用来给控件挂外置事件处理函数。它适合应用侧代码：你不需要写一个新的控件类型，也不需要实现 `View`，直接在创建控件时链式绑定事件。
+
+完整方法列表、handler 类型和派发状态见 [Handler API](/zh/api/handler)。这一页只讲怎么用。
+
+## 基本写法
+
+导入 `EventBuilder` 后，所有实现了 `View` 的控件都可以链式绑定事件。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("保存")
+    .on_click(|view_id, key_state, mouse_position| {
+        println!("{view_id} clicked at {mouse_position:?}");
+    })
+    .on_mouse_enter(|view_id| {
+        println!("{view_id} entered");
+    })
+    .on_mouse_leave(|view_id| {
+        println!("{view_id} left");
+    });
+```
+
+事件回调的参数不是每种都一样。比如鼠标点击会给 `ViewId`、`KeyState` 和 `MousePosition`；鼠标进入、离开只给 `ViewId`；键盘事件会给 `ViewId`、`KeyCode` 和修饰键状态。具体签名查 [EventBuilder API](/zh/api/handler#eventbuilder) 和 [handler 包装类型](/zh/api/handler#handler-包装类型)。
+
+## 不只可以传闭包
+
+事件 Builder 的参数不是“只能传闭包”。源码里的方法参数是 `impl Into<On...Handler>`，而 handler 类型对满足签名的 `Fn(...) + Send + Sync + 'static` 实现了 `From<F>`。所以你可以传闭包，也可以传普通函数、关联函数或方法项。
+
+```rust
+use flor::base::platform::{KeyState, MousePosition};
+use flor::view::builder::EventBuilder;
+use flor::view::ViewId;
+use flor_lys::label::label;
+
+fn save_clicked(view_id: ViewId, _key_state: KeyState, _pos: MousePosition) {
+    println!("save from {view_id}");
+}
+
+let save = label("保存")
+    .on_click(save_clicked);
+```
+
+关联函数也可以直接传：
+
+```rust
+use flor::base::platform::{KeyState, MousePosition};
+use flor::view::builder::EventBuilder;
+use flor::view::ViewId;
+use flor_lys::label::label;
+
+struct Actions;
+
+impl Actions {
+    fn open(view_id: ViewId, _key_state: KeyState, _pos: MousePosition) {
+        println!("open from {view_id}");
+    }
+}
+
+let open = label("打开")
+    .on_click(Actions::open);
+```
+
+闭包适合就地写少量逻辑；函数和方法适合复用逻辑，或者把页面代码拆得更清楚。只要签名匹配，传哪一种都可以。
+
+## 忽略不用的参数
+
+事件参数会按 handler 类型固定传入。用不到的参数可以用 `_` 或 `_name` 忽略。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("删除")
+    .on_click(|view_id, _, _| {
+        println!("delete {view_id}");
+    });
+```
+
+不要自己减少参数数量。比如 `on_click` 需要的是鼠标 handler，回调应接收三个参数；只是不使用其中某些参数时，把它们写成 `_`。
+
+## 鼠标事件
+
+鼠标事件通常用于点击、按下、松开、移动、进入和离开。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("可点击")
+    .on_button_down(|view_id, _, pos| {
+        println!("down {view_id}: {pos:?}");
+    })
+    .on_button_up(|view_id, _, pos| {
+        println!("up {view_id}: {pos:?}");
+    })
+    .on_click(|view_id, _, _| {
+        println!("click {view_id}");
+    });
+```
+
+常规鼠标命中事件的 `MousePosition` 是目标控件局部坐标。完整鼠标事件列表看 [Handler API 的当前派发状态](/zh/api/handler#当前派发状态)。
+
+## 键盘事件
+
+键盘事件派发给当前焦点控件。要让控件收到控件级 `on_key_down` / `on_key_up`，先让它进入焦点表；焦点机制见 [焦点机制](/zh/guide/use/focus)。
+
+```rust
+use flor::base::platform::{HandleResult, KeyCode};
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let editor = label("按 Ctrl+S 保存")
+    .focus_index(0)
+    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+        if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
+            println!("save");
+            HandleResult::Handled
+        } else {
+            HandleResult::Default
+        }
+    });
+```
+
+键盘 handler 返回 `HandleResult`。返回 `Handled` 表示这个按键已经处理；返回 `Default` 表示交给默认处理。键盘 handler 的完整签名见 [键盘事件 API](/zh/api/handler#键盘事件)。
+
+## 焦点和生命周期事件
+
+`on_focus` / `on_blur` 由焦点管理器触发，第二个参数是虚拟焦点序号。
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let input = label("名称")
+    .focus_index(0)
+    .on_focus(|view_id, virtual_index| {
+        println!("focus {view_id}: {virtual_index}");
+    })
+    .on_blur(|view_id, virtual_index| {
+        println!("blur {view_id}: {virtual_index}");
+    });
+```
+
+`on_create` 适合在控件树创建后做一次运行时初始化，例如为弹出层推入焦点作用域：
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let dialog = label("弹出层")
+    .on_create(|view_id| {
+        view_id.push_focus_scope();
+    });
+```
+
+生命周期类 handler 的别名和参数见 [View 与生命周期事件 API](/zh/api/handler#view-与生命周期事件)。
+
+## 功能特性事件
+
+拖放和主题变化这类事件受 feature 控制。启用对应 feature 后，相关 builder 方法才可用。完整说明见 [Handler API](/zh/api/handler)。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+#[cfg(feature = "drag-drop")]
+let drop_area = label("拖放到这里")
+    .on_drop(|view_id, _key_state, _mouse_position, data, _effect| {
+        println!("drop on {view_id}: {data:?}");
+    });
+```
+
+如果你不确定一个事件当前是否已经接入派发路径，先看 [当前派发状态](/zh/api/handler#当前派发状态)。教程页不会重复维护每个方法的完整状态表。

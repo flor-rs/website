@@ -1,0 +1,500 @@
+# Flor Signal Reactive System
+
+Flor framework has a built-in lightweight reactive signal system. This signal system is inspired by [Floem](https://github.com/lapce/floem), referencing its API design, but completely independently implemented by us. Unlike Floem, because of Flor's design goals, **Flor Signal naturally supports cross-thread use**, signals can be safely read, written and passed in multi-threaded environments.
+
+This article mainly explains how to use Signal. For complete function signatures and trait lists, see [Signal API Reference](/en/api/signal).
+
+## Creating Signals
+
+Signal usage entry points are basically all under `flor::signal`. First remember these `create_*` APIs, can complete most scenarios:
+
+| API | Purpose |
+| --- | --- |
+| `create_signal(value)` | Create a readable and writable value signal |
+| `create_rw_signal(value)` | Create value signal, and directly split into reader and writer |
+| `create_signal_with_label(value, label)` | Create value signal with debug label |
+| `create_rw_signal_with_label(value, label)` | Create value signal with debug label, and directly split read-write |
+| `create_list_signal(vec)` | Create a readable and writable list signal |
+| `create_rw_list_signal(vec)` | Create list signal, and directly split into reader and writer |
+| `create_list_signal_with_label(vec, label)` | Create list signal with debug label |
+| `create_rw_list_signal_with_label(vec, label)` | Create list signal with debug label, and directly split read-write |
+
+### Value Signal
+
+Most commonly used is `create_signal`. It returns a `RwSignal<T>`, can read and write.
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+
+// Create a readable and writable signal storing i32.
+let count = create_signal(0);
+
+// Reading requires Read trait.
+let value = count.get();
+
+// Writing requires Write trait.
+count.set(value + 1);
+
+// In-place modification based on old value.
+count.update(|value| *value += 1);
+```
+
+If reading and writing will be handed to different code, using `create_rw_signal` can directly get a pair of read-write handles when creating:
+
+```rust
+use flor::signal::{create_rw_signal, Read, Write};
+
+// read can only read, write can only write.
+let (read, write) = create_rw_signal(0);
+
+let value = read.get();
+write.set(value + 1);
+```
+
+Can also first create `RwSignal<T>`, then split or derive where needed:
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+
+let count = create_signal(0);
+
+// Derive read-only and write-only handles.
+let read = count.as_read();
+let write = count.as_write();
+
+write.set(read.get() + 1);
+
+// Or directly split into a pair of read-write handles.
+let (read, write) = count.split();
+write.set(read.get() + 1);
+```
+
+## Constant Signal
+
+Constant signal is a practical capability: it allows API to simultaneously accept fixed values and reactive values. For example, widget property can pass `"Hello"`, or pass a closure reading signal.
+
+`ConstSignal<T>` doesn't enter global runtime, doesn't establish subscription, `destroy()` is also empty operation. It just wraps a normal value into a reader implementing `Read<T>`.
+
+Most times don't need to directly write `ConstSignal::new`, using `IntoRead` is more natural:
+
+```rust
+use flor::signal::{IntoRead, Read};
+
+// &str will be converted to ConstSignal<String>.
+let title = "Hello".into_read();
+
+assert_eq!(title.get(), "Hello".to_string());
+```
+
+`IntoRead<T>` already covers common basic types, `String`, `&str`, `&String`, `ConstSignal<T>`, `ReadSignal<T>` and `RwSignal<T>`. This lets API unify "fixed value" and "reactive value" into reader processing.
+
+## Reading and Writing
+
+### Clone Read
+
+`get()` and `try_get()` will clone value, therefore requires `T: Clone + 'static`.
+
+```rust
+use flor::signal::{create_signal, Read};
+
+let name = create_signal("Flor".to_string());
+
+// get will clone current value.
+let value = name.get();
+
+// try_get returns None when signal is destroyed.
+let maybe_value = name.try_get();
+```
+
+`get()` panics when signal doesn't exist or type mismatches; `try_get()` returns `None` when signal doesn't exist.
+
+### Reference Read
+
+If value is large, don't want to clone, can use `get_ref()` or `try_get_ref()`. They return `SignalRef<'_, T>`, can be used like `&T`.
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+
+let name = create_signal("Flor".to_string());
+
+{
+    // get_ref avoids clone, but will hold read lock during guard lifetime.
+    let name_ref = name.get_ref();
+    assert_eq!(name_ref.len(), 4);
+}
+
+// Write to same signal after guard released.
+name.set("Signal".to_string());
+```
+
+`SignalRef` holds underlying read lock. Before guard is released, don't call `set()`, `update()` and other operations requiring write lock on same signal in same thread, otherwise may deadlock.
+
+### Writing
+
+`set()` will replace entire value, `update()` will modify value in-place.
+
+```rust
+use flor::signal::{create_signal, Write};
+
+let count = create_signal(0);
+
+// Replace entire value.
+count.set(10);
+
+// In-place modification based on old value.
+count.update(|value| *value += 1);
+```
+
+If signal may have been destroyed, use `try_set()` and `try_update()`:
+
+```rust
+use flor::signal::{create_signal, Signal, Write};
+
+let count = create_signal(0);
+
+// Here simulate signal has been destroyed by dynamic window or temporary page.
+count.destroy();
+
+// try_* returns false when signal doesn't exist, instead of panic.
+assert!(!count.try_set(1));
+assert!(!count.try_update(|value| *value += 1));
+```
+
+## Reactive Update
+
+### `create_effect`
+
+`create_effect` creates basic side effect. Closure will immediately execute once, and receive value returned by previous execution.
+
+```rust
+use flor::signal::{create_effect, create_signal, Read, Write};
+
+let count = create_signal(0);
+
+create_effect(move |previous: Option<i32>| {
+    // Reading signal in effect will automatically establish dependency.
+    let current = count.get();
+    println!("count: {current}, previous: {previous:?}");
+
+    // Return value will become previous for next execution.
+    current
+});
+
+// After writing count, effect depending on count will be re-executed.
+count.set(1);
+```
+
+First execution `previous` is `None`. Subsequent triggered by signal update, `previous` is value returned by previous closure.
+
+### `create_updater`
+
+`create_updater` is more suitable for UI and derived state binding. It first executes `compute` to get initial value and returns; subsequent dependency changes re-execute `compute`, then give new value to `on_change`.
+
+```rust
+use flor::signal::{create_signal, create_updater, Read, Write};
+
+let count = create_signal(0);
+
+let initial = create_updater(
+    // compute: read signal and generate derived value.
+    move || format!("Value: {}", count.get()),
+    // on_change: receive new derived value after dependency update.
+    |value| println!("updated: {value}"),
+);
+
+assert_eq!(initial, "Value: 0");
+
+// Trigger dependency update; on_change will receive new value in subsequent update.
+count.set(5);
+```
+
+Note: `on_change` won't be called during initial calculation, only called after dependency update.
+
+### `create_updater_with_id`
+
+Normal business code usually just uses `create_updater`. `create_updater_with_id` is mainly for framework internal use, it returns `(Id, R)`, where `Id` is effect id, `R` is initial value.
+
+Framework internally uses it to delay some UI effects until after widget activation then enqueue, for example class, layout, transform and other builders. Reason for delay is because during layout assembly, widget's `ViewId` may not have been mounted to window and parent widget. After widget activation, putting effect id into update queue can let these UI updates execute in complete widget relationship.
+
+## List Signal
+
+List signal saves `Vec<T>`, and allocates independent row-level `Id` for each list element. Structure changes subscribe to list `Id`; reading or modifying some element will subscribe or trigger that element's own row-level `Id`.
+
+### Creation and Basic Operations
+
+```rust
+use flor::signal::{create_list_signal, ListRead, ListWrite};
+
+// List signal saves Vec<T>.
+let items = create_list_signal(vec![1, 2]);
+
+// Structure write.
+items.push(3);
+items.insert(1, 10);
+
+// Element write.
+items.set(0, 100);
+items.update(2, |value| *value += 1);
+
+// Read structure and elements.
+assert_eq!(items.len(), Some(4));
+assert_eq!(items.get(0), 100);
+
+// Remove returns removed element.
+let removed = items.remove(1);
+assert_eq!(removed, 10);
+```
+
+### Reading List
+
+```rust
+use flor::signal::{create_list_signal, ListRead};
+
+let items = create_list_signal(vec![1, 2, 3]);
+
+// Read structure info.
+assert_eq!(items.len(), Some(3));
+assert_eq!(items.len_or_zero(), 3);
+assert!(!items.is_empty());
+
+// Read element values.
+assert_eq!(items.get(0), 1);
+assert_eq!(items.try_get(10), None);
+
+// Read entire list.
+assert!(items.contains(&2));
+assert_eq!(items.to_vec(), vec![1, 2, 3]);
+```
+
+`len()` returns `Option<usize>`, returns `None` after signal destroyed; `len_or_zero()` treats non-existent list as empty list. `get(index)` panics when list doesn't exist or out of bounds; `try_get(index)` returns `None` when list doesn't exist or out of bounds.
+
+### No-Clone Read
+
+When need to avoid clone, can use `for_each_ref()` or `try_borrow()`.
+
+```rust
+use flor::signal::{create_list_signal, ListRead};
+
+let items = create_list_signal(vec!["a".to_string(), "b".to_string()]);
+
+// for_each_ref can avoid cloning each element.
+items.for_each_ref(|item| {
+    println!("{item}");
+});
+
+// try_borrow returns list read-only borrow, suitable for controlling traversal method yourself.
+if let Some(list_ref) = items.try_borrow() {
+    for item in list_ref.iter() {
+        println!("{item}");
+    }
+}
+```
+
+`for_each_ref()` will subscribe to list structure and row-level signals traversed. `try_borrow()` currently only subscribes to list structure; if effect needs to re-execute after element value is `set(index, ...)` or `update(index, ...)`, prefer using `get()`, `to_vec()`, `for_each_ref()` or `contains()`.
+
+### Safe Write Version
+
+All list write methods have corresponding safe versions:
+
+| panic version | safe version | on failure |
+| --- | --- | --- |
+| `push(value)` | `try_push(value)` | returns `false` |
+| `insert(index, value)` | `try_insert(index, value)` | returns `false` |
+| `set(index, value)` | `try_set(index, value)` | returns `false` |
+| `update(index, f)` | `try_update(index, f)` | returns `false` |
+| `remove(index)` | `try_remove(index)` | returns `None` |
+| `clear()` | `try_clear()` | returns `false` |
+
+Structure changes trigger list `Id`; element value changes only trigger that element's row-level `Id`. Therefore, effect only reading `len()` won't re-execute because of `set(index, ...)`; effect reading some element, `to_vec()` or `for_each_ref()` will be sensitive to corresponding element value changes.
+
+## Batch Update
+
+`batch` will open batch processing mode in current thread. Signal writes in closure won't immediately add each change to update queue, instead collect changed signal `Id`, after closure ends uniformly enqueue and deduplicate.
+
+```rust
+use flor::signal::{batch, create_signal, Write};
+
+let a = create_signal(0);
+let b = create_signal(0);
+
+batch(|| {
+    // Same signal written multiple times in one batch, will deduplicate by signal Id.
+    a.set(1);
+    a.set(2);
+
+    // Different signals will still separately trigger their own subscription updates.
+    b.set(3);
+});
+```
+
+`batch` deduplication granularity is signal `Id`. Same signal written multiple times in one `batch`, will only enqueue once for this signal after closure ends; so above `a.set(1)` and `a.set(2)` will only trigger one `a` subscription update, subscriber sees value after last write. Different signals will still separately enqueue, for example `a` and `b` will each trigger their own subscription updates.
+
+`batch` is thread-local, only affects current thread. Signal writes in other threads won't enter current thread's batch processing collection. If closure panics, `batch` will restore batch processing state, then continue propagating panic outward.
+
+## Integration with UI Widgets
+
+> This chapter belongs to "Widget Development" content. If don't need to develop widgets, quick understanding is enough.
+
+Flor UI widgets usually bind reactive values through `create_updater`.
+
+Take `Label::new` pattern as example:
+
+```rust
+pub fn new<P: StringProp>(title: P) -> Self {
+    let view_id = ViewId::new_with_layout(|view_id| LayoutResolver::new(view_id));
+
+    let title = create_updater(
+        move || title.make(),
+        move |value| view_id.update_state(Box::new(value)),
+    );
+
+    Self {
+        view_id,
+        title,
+        style: LabelStyleResolver::new_with_compute_func(view_id, computed_label_style),
+        measure_cache: FxHashMap::default(),
+    }
+}
+```
+
+User side usually passes closure reading signal:
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+use flor_lys::label::label;
+
+let title = create_signal("Hello".to_string());
+
+let view = label(move || title.get());
+
+title.set("World".to_string());
+```
+
+Workflow:
+
+1. `create_updater` first executes `compute` once, gets widget initial value.
+2. When reading signal in `compute`, current effect id is recorded in thread-local `SCOPE`.
+3. `Read::track()` or `ListRead::track()` subscribes current effect to read signal.
+4. When signal writes, runtime adds corresponding signal id to update queue.
+5. Flor event loop calls `RUNTIME.execute_update_queue()`, runs subscribed effects.
+6. `on_change` calls `ViewId::update_state` or other UI update entry points.
+
+## Usage Suggestions
+
+Prefer passing reactive values through closures:
+
+```rust
+label(move || title.get());
+```
+
+Don't pass `title.get()` result directly to API needing reactive update. That only reads a normal value once.
+
+Use `ReadSignal<T>`, `WriteSignal<T>` to express business intent:
+
+```rust
+let (read, write) = create_signal(0).split();
+
+child(read);
+store_writer(write);
+```
+
+Avoid writing to signal you depend on in effect:
+
+```rust
+create_effect(move |_| {
+    let value = count.get();
+    count.set(value + 1);
+    value
+});
+```
+
+This kind of code will repeatedly trigger itself in subsequent updates, easily forming infinite updates.
+
+When holding `SignalRef` or `ListRef`, first release reference guard, then write to same signal.
+
+For complete function signatures and trait lists, see [Signal API Reference](/en/api/signal).
+
+## Design Explanation
+
+### Lifetime
+
+All value signals and list signals are globally alive. `RwSignal<T>`, `ReadSignal<T>`, `WriteSignal<T>`, `RwListSignal<T>`, `ReadListSignal<T>`, `WriteListSignal<T>` are all `Copy` handles, copying handle won't copy underlying value, won't change lifetime.
+
+Global alive is Flor's tradeoff to keep signal handles `Copy` usable: after signal created, it lives in global runtime, dropping some handle won't release underlying data. Flor is not only suitable for large even super large GUI, also suitable for small tool programs; in lightweight programs, Flor's compiled size performance is also one of core design goals. For small tools, simple windows, stable interface structure, window lifetime close to process lifetime programs, letting signals naturally回收 with process end is usually one of recommended writing styles, memory and performance impact is small.
+
+`destroy()` is more suitable for dynamic resources with明确 ending lifetime, for example windows, pages, panels that can be repeatedly created and destroyed, or temporary signals with large quantity in heavy, super heavy GUI. After using `destroy()`, then combine with `try_get()`, `try_set()`, `try_update()` to handle possibly invalid handles.
+
+```rust
+use flor::signal::{create_signal, Read, Signal, Write};
+
+let count = create_signal(1);
+
+// Signal handle is Copy; another points to same underlying signal.
+let another = count;
+
+assert!(count.exists());
+assert_eq!(another.get(), 1);
+
+// After destroying underlying signal, all handles pointing to it will invalid.
+count.destroy();
+
+assert!(!another.exists());
+assert_eq!(another.try_get(), None);
+assert!(!another.try_set(2));
+```
+
+When list signal is destroyed, it will simultaneously destroy all row-level signals inside it.
+
+### Read-Write Semantics
+
+Flor's read-write capability is provided through traits. `ReadSignal<T>` only implements `Read<T>`, so under normal type constraints can't call `set()` or `update()`; `WriteSignal<T>` only implements `Write<T>`, so can't call `get()`.
+
+Read-write split expresses business semantics, not security boundary or permission isolation. This sentence doesn't mean reader has writer's permission: `ReadSignal<T>` itself has no write methods, when passed by `Read<T>` constraint can only read; `WriteSignal<T>` itself has no read methods, when passed by `Write<T>` constraint can only write. Read is read, write is write, can maintain clarity in business code and source code search.
+
+Therefore, recommend放心 using corresponding signal types to express business access boundaries: places only needing read pass `ReadSignal<T>`, places only needing write pass `WriteSignal<T>`, when need both then pass `RwSignal<T>`. Such split can make API, call points and code reading all clearer.
+
+Meanwhile, Flor won't let this semantic split hold back usage. When确实 need write, code will appear `as_write()`, `split()` or writer parameter, reader can clearly see here got new access capability; under normal paths, reader still won't have write permission.
+
+## Debug Label
+
+Can set labels for read-write signals, convenient for debugging and tracing.
+
+```rust
+use flor::signal::{create_list_signal_with_label, create_signal_with_label};
+
+let count = create_signal_with_label(0, "counter");
+let items = create_list_signal_with_label(vec![1, 2, 3], "items");
+
+count.set_label("main_counter");
+items.set_label("main_items");
+```
+
+Labels are only written to runtime in `debug_assertions` or when `signal-tracing` feature enabled. Currently this part mainly provides runtime-side label recording, complete visual debugging experience still needs to wait for `devtools` related capability完善; therefore it's more suitable as foundation capability for subsequent tracing and debugging tools, rather than already completed user-side debugging panel.
+
+## Deep: Runtime Mechanism
+
+This part is for understanding Signal's internal behavior; normal usage doesn't need to master these details first.
+
+`RUNTIME` saves following core states:
+
+| Field | Purpose |
+| --- | --- |
+| `values` | Value signals and effect last return values |
+| `list_signal` | List signals and their row-level elements |
+| `subscribe` | `Signal Id -> Effect Id` subscription relationship |
+| `effects` | effect id to effect instance mapping |
+| `effect_subscriptions` | how many signals subscribe to effect |
+| `update_queue` | signal id or effect id waiting to execute |
+| `labels` | debug labels, only exist in debug or `signal-tracing` |
+
+Dependency tracking relies on thread-local `SCOPE`:
+
+1. Before effect execution, write current effect id to `SCOPE`.
+2. `get()`, `get_ref()`, `ListRead` read methods will call `track()`.
+3. `track()` reads `SCOPE`, subscribes current effect to corresponding signal id.
+4. When writing signal, runtime adds written signal id to update queue.
+5. Event loop executes update queue, finds effects subscribing to that signal and runs.
+
+`batch` uses thread-local `BATCH` to collect signal ids. After batch processing ends, these ids are uniformly added to global update queue.
+
+Current implementation won't actively clear old dependencies before each effect re-execution. For dynamic branches where dependency set frequently changes, should尽量 keep read range stable, avoid long-term accumulating no longer needed subscriptions.

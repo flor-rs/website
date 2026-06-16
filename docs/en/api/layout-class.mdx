@@ -1,0 +1,348 @@
+# Layout Class Syntax
+
+This page lists the current support scope of Flor's built-in layout classes. For `.class(...)` usage instructions, see [Atomic Class Support](/en/guide/use/builder/class). For general class string parsing rules, see [Class Syntax Basics](/en/api/class-syntax).
+
+Layout classes are uniformly parsed by Flor and available for all widgets. Flex, Grid, Block related classes are controlled by features.
+
+## Value Syntax
+
+The `*` in the table below represents a value. For general value syntax, see [Class Syntax Basics](/en/api/class-syntax#length-values).
+
+| Syntax | Example | Description |
+| --- | --- | --- |
+| Bare number | `4` | Parsed according to Tailwind spacing conventions, default `4 = 16px`. |
+| With unit | `[12px]`, `[1rem]`, `[12pt]`, `[50vw]`, `[50vh]` | Supports `px`, `rem`, `pt`, `vw`, `vh`. |
+| Percentage | `50%`, `[50%]` | Converted to percentage. |
+| Fraction | `1/2`, `1/3` | Converted to percentage. |
+| Keywords | `auto`, `full`, `screen` | Interpreted by specific property. |
+
+## Display
+
+| Class | Effect | feature |
+| --- | --- | --- |
+| `hidden` | `Display::None` | None |
+| `flex` | `Display::Flex` | `layout-flex` |
+| `grid` | `Display::Grid` | `layout-grid` |
+| `block` | `Display::Block` | `layout-block` |
+
+## Position
+
+| Class | Effect |
+| --- | --- |
+| `relative` | `Position::Relative` |
+| `absolute` | `Position::Absolute` |
+
+Currently `fixed` and `sticky` are not supported.
+
+## Box Sizing
+
+| Class | Effect |
+| --- | --- |
+| `box-border` | `BoxSizing::BorderBox` |
+| `box-content` | `BoxSizing::ContentBox` |
+
+## Z Index
+
+`z-*` is handled as layer level in `.class(...)` entry.
+
+| Class | Effect |
+| --- | --- |
+| `z-auto` | z-index set to `0`. |
+| `z-10` | z-index set to `10`. |
+| `z--1` | z-index set to `-1`. |
+
+`z-*` currently does not go through state prefix parsing; for example `hover:z-10` is not processed as hover layer level.
+
+## Overflow
+
+| Class | Effect |
+| --- | --- |
+| `overflow-visible` | x/y both `Overflow::Visible`. |
+| `overflow-hidden` | x/y both `Overflow::Hidden`. |
+| `overflow-clip` | x/y both `Overflow::Clip`. |
+| `overflow-scroll` | x/y both `Overflow::Scroll`. |
+| `overflow-x-visible` / `overflow-x-hidden` / `overflow-x-clip` / `overflow-x-scroll` | Only sets x direction. |
+| `overflow-y-visible` / `overflow-y-hidden` / `overflow-y-clip` / `overflow-y-scroll` | Only sets y direction. |
+
+## Size
+
+| Class Pattern | Effect | Supported Values |
+| --- | --- | --- |
+| `w-*` | Width | `auto`, `full`, `fit`, `min`, `max`, numbers, fractions, percentages, arbitrary length values. |
+| `h-*` | Height | Same as `w-*`. |
+| `size-*` | Sets both width and height | Same as `w-*`. |
+| `w-screen` / `h-screen` / `size-screen` | Uses current window client area size | `screen`. |
+| `min-w-*` / `min-h-*` | Minimum width / minimum height | Same as `w-*`, also supports `screen`. |
+| `max-w-*` / `max-h-*` | Maximum width / maximum height | Same as `w-*`, also supports `screen`. |
+
+Examples:
+
+```text
+w-full
+h-auto
+w-1/2
+min-w-[240px]
+max-h-[80vh]
+size-10
+```
+
+## Padding
+
+| Class Pattern | Effect |
+| --- | --- |
+| `p-*` | Four-side padding. |
+| `px-*` | Left/right padding. |
+| `py-*` | Top/bottom padding. |
+| `pl-*` | Left padding. |
+| `pr-*` | Right padding. |
+| `pt-*` | Top padding. |
+| `pb-*` | Bottom padding. |
+
+Supports numbers, percentages, fractions, `full` and arbitrary length values.
+
+```text
+p-4
+px-2
+pt-[10px]
+pl-1/2
+```
+
+## Margin
+
+| Class Pattern | Effect |
+| --- | --- |
+| `m-*` | Four-side margin. |
+| `mx-*` | Left/right margin. |
+| `my-*` | Top/bottom margin. |
+| `ml-*` | Left margin. |
+| `mr-*` | Right margin. |
+| `mt-*` | Top margin. |
+| `mb-*` | Bottom margin. |
+
+Supports `auto`, numbers, percentages, fractions, `full` and arbitrary length values.
+
+```text
+m-4
+mx-auto
+mt-2
+mb-[20px]
+```
+
+## Inset
+
+Inset classes are typically used with `absolute` or `relative`.
+
+| Class Pattern | Effect |
+| --- | --- |
+| `inset-*` | Four-side offset. |
+| `inset-x-*` | Left/right offset. |
+| `inset-y-*` | Top/bottom offset. |
+| `left-*` | Left offset. |
+| `right-*` | Right offset. |
+| `top-*` | Top offset. |
+| `bottom-*` | Bottom offset. |
+
+Supports `auto`, numbers, percentages, fractions, `full` and arbitrary length values.
+
+```text
+inset-0
+top-4
+left-1/2
+right-[10px]
+```
+
+## Border Width
+
+Border classes here only set layout-level border thickness, not border color or corner radius.
+
+| Class Pattern | Effect |
+| --- | --- |
+| `border` | Four-side thickness 1px. |
+| `border-*` | Four-side thickness. |
+| `border-x-*` / `border-y-*` | Left/right / top/bottom thickness. |
+| `border-l-*` / `border-r-*` / `border-t-*` / `border-b-*` | Single side thickness. |
+
+```text
+border
+border-2
+border-b-[1px]
+```
+
+## Gap
+
+Requires `layout-flex` or `layout-grid` feature.
+
+| Class Pattern | Effect |
+| --- | --- |
+| `gap-*` | Spacing for both directions. |
+| `gap-x-*` | x direction spacing. |
+| `gap-y-*` | y direction spacing. |
+
+```text
+gap-4
+gap-x-2
+gap-y-[10px]
+```
+
+## Flex
+
+Requires `layout-flex` feature.
+
+| Class | Effect |
+| --- | --- |
+| `flex-row` | `FlexDirection::Row` |
+| `flex-row-reverse` | `FlexDirection::RowReverse` |
+| `flex-col` | `FlexDirection::Column` |
+| `flex-col-reverse` | `FlexDirection::ColumnReverse` |
+| `flex-wrap` | `FlexWrap::Wrap` |
+| `flex-wrap-reverse` | `FlexWrap::WrapReverse` |
+| `flex-nowrap` | `FlexWrap::NoWrap` |
+| `flex-1` | `grow: 1`, `shrink: 1`, `basis: 0%` |
+| `flex-auto` | `grow: 1`, `shrink: 1`, `basis: auto` |
+| `flex-initial` | `grow: 0`, `shrink: 1`, `basis: auto` |
+| `flex-none` | `grow: 0`, `shrink: 0`, `basis: auto` |
+| `grow` | `FlexGrow(1.0)` |
+| `grow-*` / `grow-[1.5]` | Custom grow value. |
+| `shrink` | `FlexShrink(1.0)` |
+| `shrink-*` / `shrink-[0.5]` | Custom shrink value. |
+| `basis-*` | `FlexBasis`, value parsed as size value. |
+
+## Flex / Grid Shared Alignment
+
+Requires `layout-flex` or `layout-grid` feature.
+
+| Class | Effect |
+| --- | --- |
+| `items-start` | `AlignItems::Start` |
+| `items-end` | `AlignItems::End` |
+| `items-center` | `AlignItems::Center` |
+| `items-baseline` | `AlignItems::Baseline` |
+| `items-stretch` | `AlignItems::Stretch` |
+| `self-start` | `AlignSelf::Start` |
+| `self-end` | `AlignSelf::End` |
+| `self-center` | `AlignSelf::Center` |
+| `self-baseline` | `AlignSelf::Baseline` |
+| `self-stretch` | `AlignSelf::Stretch` |
+| `justify-start` | `JustifyContent::Start` |
+| `justify-end` | `JustifyContent::End` |
+| `justify-center` | `JustifyContent::Center` |
+| `justify-between` | `JustifyContent::SpaceBetween` |
+| `justify-around` | `JustifyContent::SpaceAround` |
+| `justify-evenly` | `JustifyContent::SpaceEvenly` |
+| `justify-stretch` | `JustifyContent::Stretch` |
+| `content-start` | `AlignContent::Start` |
+| `content-end` | `AlignContent::End` |
+| `content-center` | `AlignContent::Center` |
+| `content-between` | `AlignContent::SpaceBetween` |
+| `content-around` | `AlignContent::SpaceAround` |
+| `content-evenly` | `AlignContent::SpaceEvenly` |
+| `content-stretch` | `AlignContent::Stretch` |
+
+## Grid
+
+Requires `layout-grid` feature.
+
+| Class | Effect |
+| --- | --- |
+| `grid-flow-row` | `GridAutoFlow::Row` |
+| `grid-flow-col` | `GridAutoFlow::Column` |
+| `grid-flow-row-dense` | `GridAutoFlow::RowDense` |
+| `grid-flow-col-dense` | `GridAutoFlow::ColumnDense` |
+| `row-start-*` / `row-end-*` | Sets grid row start/end lines, value is integer. |
+| `col-start-*` / `col-end-*` | Sets grid column start/end lines, value is integer. |
+| `row-span-*` | Sets row span, value is positive integer. |
+| `col-span-*` | Sets column span, value is positive integer. |
+| `justify-items-start` | `JustifyItems::Start` |
+| `justify-items-end` | `JustifyItems::End` |
+| `justify-items-center` | `JustifyItems::Center` |
+| `justify-items-stretch` | `JustifyItems::Stretch` |
+| `justify-self-start` | `JustifySelf::Start` |
+| `justify-self-end` | `JustifySelf::End` |
+| `justify-self-center` | `JustifySelf::Center` |
+| `justify-self-stretch` | `JustifySelf::Stretch` |
+
+Currently `grid-cols-*`, `grid-rows-*`, `auto-cols-*`, `auto-rows-*` are not supported.
+
+## Block Text Align
+
+Requires `layout-block` feature.
+
+| Class | Effect |
+| --- | --- |
+| `text-left` | `TextAlign::LegacyLeft` |
+| `text-center` | `TextAlign::LegacyCenter` |
+| `text-right` | `TextAlign::LegacyRight` |
+
+Note: These are block layout text/inline alignment classes. Specific widgets may also parse `text-*` as widget style, such as text color or font size.
+
+## Aspect Ratio
+
+| Class | Effect |
+| --- | --- |
+| `aspect-square` | 1:1. |
+| `aspect-video` | 16:9. |
+| `aspect-[N]` | Custom ratio. |
+| `aspect-[N/M]` | Fraction ratio. |
+
+```text
+aspect-square
+aspect-video
+aspect-[4/3]
+```
+
+## Scrollbar Width
+
+| Class Pattern | Effect |
+| --- | --- |
+| `scrollbar-*` | Sets `ScrollbarWidth`, value uses px. |
+
+```text
+scrollbar-0
+scrollbar-4
+scrollbar-[10px]
+```
+
+## State Prefixes
+
+Layout classes support general state prefixes:
+
+```text
+p-4 hover:p-6 focus:p-8
+```
+
+State prefix rules see [Class Syntax Basics](/en/api/class-syntax#state-prefixes).
+
+`z-*` is an exception: it is handled as layer level before entering state prefix parsing, so `hover:z-10` is currently not supported.
+
+## Merge Behavior
+
+The same batch of classes is parsed in declaration order:
+
+```text
+p-4 pl-2 pt-1
+```
+
+Result is left overridden by `pl-2`, top overridden by `pt-1`, other sides retain `p-4`.
+
+```text
+p-4 p-8
+```
+
+Result is `p-8` overriding `p-4`.
+
+Multiple calls to `.class(...)` create multiple layers; later created layers override previous layers on the same layout property.
+
+## Currently Not Supported
+
+Here are common but currently unimplemented syntax in layout classes:
+
+| Syntax | Status |
+| --- | --- |
+| `fixed`, `sticky` | Not supported. |
+| `grid-cols-*`, `grid-rows-*` | Not supported. |
+| `auto-cols-*`, `auto-rows-*` | Not supported. |
+| `order-*` | Not supported. |
+| `place-content-*`, `place-items-*`, `place-self-*` | Not supported. |
+| `space-x-*`, `space-y-*` | Not supported. |
+| Responsive prefixes `sm:`, `md:`, `lg:` | Not supported. |
+| Negative value prefix `-m-4`, `-top-2` | Not supported; use builder or supplement implementation when negative values are needed. |

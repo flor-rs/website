@@ -1,0 +1,35 @@
+# Theme Change
+
+`theme-change` feature is used to enable system theme change related types and event builder. It适合 when system switches from light mode to dark mode, update application theme or rebuild related styles.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "theme-change"] }
+```
+
+## Event Entry
+
+After enabling feature, can use `on_theme_changed(...)`:
+
+```rust
+use flor::base::platform::ThemeMode;
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let root = label("Theme")
+    .on_theme_changed(|_view_id, mode| {
+        match mode {
+            ThemeMode::Light => println!("light"),
+            ThemeMode::Dark => println!("dark"),
+        }
+    });
+```
+
+`ThemeMode` currently has two values:
+
+| Value | Meaning |
+| --- | --- |
+| `ThemeMode::Light` | Light mode. |
+| `ThemeMode::Dark` | Dark mode. |
+
+Complete signature and current dispatch status see [Handler API's Theme Change Events](/en/api/handler#主题变化事件). If you only need normal widget state styles, don't need to enable this feature; it faces system theme change.

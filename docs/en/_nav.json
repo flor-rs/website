@@ -1,0 +1,41 @@
+[
+  {
+    "text": "Flor",
+    "activeMatch": "/guide/",
+    "items": [
+      {
+        "text": "The Rambling Book",
+        "link": "/guide/book-index"
+      },
+      {
+        "text": "Quick Overview",
+        "link": "/guide/startup"
+      },
+      {
+        "text": "Glossary",
+        "link": "/guide/glossary"
+      },
+      {
+        "text": "AI",
+        "link": "/guide/ai"
+      },
+      {
+        "text": "Using the Framework",
+        "link": "/guide/use/"
+      },
+      {
+        "text": "Framework Capabilities",
+        "link": "/guide/features/"
+      },
+      {
+        "text": "Widget Development",
+        "link": "/guide/control/"
+      }
+    ]
+  },
+  {
+    "text": "API",
+    "link": "/api/",
+    "activeMatch": "/api/"
+  }
+]

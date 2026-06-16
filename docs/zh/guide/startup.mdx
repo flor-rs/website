@@ -1,0 +1,106 @@
+## Crate 结构
+
+图形后端与平台层处于同一依赖层级，互不依赖，由核心框架按 feature 选择。
+
+| Crate | 用途 | 依赖层级 |
+| --- | --- | --- |
+| `flor-base` | 共享类型、平台抽象和图形抽象。 | L0 基础 |
+| `flor-macros` | 过程宏（`style!`、`color!` 等）。 | L0 基础 |
+| `flor-graphics-direct2d` | Direct2D 渲染后端。 | L1 渲染后端 |
+| `flor-graphics-opengl` | OpenGL 渲染后端。 | L1 渲染后端 |
+| `flor-graphics-tiny-skia` | Tiny Skia 渲染后端。 | L1 渲染后端 |
+| `flor-platform-windows` | Windows 平台实现。 | L1 平台层 |
+| `flor` | 核心框架：视图系统、信号、事件循环、窗口管理。 | L2 框架 |
+
+层级数字越小越靠底层；同一层的 crate 互不依赖。
+
+## 框架 Feature
+
+`flor` 默认不启用任何 feature。应用侧通常需要至少选择一个渲染后端，然后按需要启用布局、原子类、平台能力等 feature。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "tiny-skia", "layout-flex", "class"] }
+```
+
+下面列的是 `flor` crate 暴露给用户使用的 feature。控件库可能会转发其中一部分 feature，但框架侧的名字以这里为准。平台能力的详细用法见 [框架能力](/zh/guide/features/overview)。
+
+### 渲染后端
+
+渲染后端负责把 Flor 的绘制命令提交到具体图形实现。应用至少启用一个后端；如果同时启用 GPU 后端和 `tiny-skia`，GPU 初始化失败后会继续尝试 CPU 后端。
+
+| Feature | 后端类型 | 后端 crate | 支持平台 | 用途 |
+| --- | --- | --- | --- | --- |
+| `direct2d` | GPU | `flor-graphics-direct2d` | Windows | Windows 原生 Direct2D 后端。 |
+| `opengl` | GPU | `flor-graphics-opengl` | Windows（当前实现） | OpenGL 后端。 |
+| `tiny-skia` | CPU | `flor-graphics-tiny-skia` | Windows（当前实现） | 纯 CPU 光栅化后端，可作为 GPU 后端初始化失败时的回退。 |
+
+`direct2d` 和 `opengl` 都会启用 `gpu-render-backend` 标记；同一次构建中选择一个 GPU 后端即可。`tiny-skia` 会启用 `cpu-render-backend` 标记，可以和一个 GPU 后端一起启用。
+
+### 绘制能力
+
+这些 feature 不是后端本身，而是在已启用的后端上增加绘制或资源能力。
+
+| Feature | 支持后端 | 支持平台 | 用途 |
+| --- | --- | --- | --- |
+| `svg` | `direct2d` / `opengl` / `tiny-skia` | 跟随启用的渲染后端；当前实现为 Windows | 启用 SVG 资源和 SVG 绘制支持。 |
+| `memory-font` | `direct2d` / `opengl` / `tiny-skia` | 跟随启用的渲染后端；当前实现为 Windows | 启用从内存加载字体的能力。 |
+
+基础形状、文本、图片等常规绘制能力由渲染后端提供，不需要额外打开 `svg` 或 `memory-font`。
+
+### 布局与 class
+
+| Feature | 用途 |
+| --- | --- |
+| `layout-flex` | 启用 Flex 布局相关能力。 |
+| `layout-grid` | 启用 Grid 布局相关能力。 |
+| `layout-block` | 启用 Block 布局相关能力。 |
+| `class` | 启用 `.class(...)` 原子类能力。 |
+
+布局 builder 的完整方法见 [布局 Builder](/zh/guide/use/builder/layout)。class 的用法见 [原子类](/zh/guide/use/builder/class)，layout class 的语法清单见 [layout class 语法](/zh/api/layout-class)。
+
+### 平台能力
+
+| Feature | 用途 |
+| --- | --- |
+| `clipboard` | 剪贴板能力。 |
+| `drag-drop` | 拖放事件与相关 handler。 |
+| `tray` | 系统托盘能力。 |
+| `theme-change` | 系统主题变化相关能力。 |
+| `monitor` | 显示器信息相关能力。 |
+| `hi-dpi` | 高 DPI 相关能力。 |
+| `cross-thread-window-creation` | 允许跨线程创建窗口。 |
+
+事件 builder 和 handler 里受 feature 控制的部分，见 [事件 Builder](/zh/guide/use/builder/event) 和 [Handler API](/zh/api/handler)。
+
+### 开发与内部选择
+
+| Feature | 用途 |
+| --- | --- |
+| `signal-tracing` | 在 release 模式下保留 signal 标签，便于后续追踪和调试。 |
+| `cpu-render-backend` | CPU 渲染链标记，通常由 `tiny-skia` 间接启用。 |
+| `gpu-render-backend` | GPU 渲染链标记，通常由 `direct2d` 或 `opengl` 间接启用。 |
+| `no-check-backend` | 跳过“必须启用至少一个渲染后端”的编译检查，通常只用于特殊中间层或测试场景。 |
+
+应用侧通常直接启用 `direct2d`、`opengl` 或 `tiny-skia`，不要手动只启用 `cpu-render-backend` / `gpu-render-backend` 这类内部标记。
+
+## 各部分介绍
+
+### 单纯使用框架需要了解的
+
+默认你会和控件库配合使用，优先看这些内容：
+
+- 初始化与消息循环
+- [窗口创建与控制](/zh/guide/use/window)
+- 支持跨线程的响应式信号系统
+- 使用 class 或声明式 builder 配置布局和样式
+- 按需开启框架 feature
+
+### 开发控件需要了解的
+
+默认你已经会使用 Flor 编写应用，再继续看这些内容：
+
+- `View trait`：新建控件需要实现的 trait，框架会托管生命周期、事件、绘制等流程。
+- `ViewId`：控件的唯一 ID，也提供父子关系、焦点、滚动、可视状态、重绘等运行时访问入口。
+- `Resolver` 属性宏和结构体：通过枚举生成带控件状态的属性模板代码。
+- `Render API`：框架提供大多数控件绘制够用的一套绘制 API；需要高级能力时，再按后端获取对应 handle 自定义处理。

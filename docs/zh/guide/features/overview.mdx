@@ -1,0 +1,24 @@
+# 框架能力
+
+框架能力这一栏专门介绍 `flor` 的可选能力。它们大多通过 Cargo feature 开启，启用后会暴露对应的 API、事件 builder 或平台行为。
+
+如果只是想查所有 feature 的名字，先看 [快速了解](/zh/guide/startup#框架-feature)。这一栏会把平台能力拆开讲清楚：启用后能做什么、入口在哪里、和哪些教程/API 有关。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "clipboard", "drag-drop"] }
+```
+
+## 平台能力
+
+| Feature | 能力 | 入口 |
+| --- | --- | --- |
+| `clipboard` | 读写系统剪贴板。 | [剪贴板](/zh/guide/features/clipboard) |
+| `drag-drop` | 接收系统拖放进入、悬停、离开、释放事件。 | [拖放](/zh/guide/features/drag-drop) |
+| `tray` | 添加、更新、删除系统托盘图标，并接收托盘鼠标事件。 | [系统托盘](/zh/guide/features/tray) |
+| `theme-change` | 暴露系统主题变化相关事件入口。 | [主题变化](/zh/guide/features/theme-change) |
+| `monitor` | 查询显示器列表、工作区、DPI、缩放等信息。 | [显示器信息](/zh/guide/features/monitor) |
+| `hi-dpi` | 启用进程级 DPI 感知，配合 DPI 变化事件更新布局单位。 | [高 DPI](/zh/guide/features/hi-dpi) |
+| `cross-thread-window-creation` | 允许在事件循环线程之外请求创建窗口。 | [跨线程窗口创建](/zh/guide/features/cross-thread-window-creation) |
+
+事件类能力通常还需要配合 [事件 Builder](/zh/guide/use/builder/event) 使用；完整 handler 签名和当前派发状态见 [Handler API](/zh/api/handler)。

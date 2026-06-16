@@ -1,0 +1,370 @@
+# View Trait
+
+`View` 是 Flor 的控件实现接口。一个具体控件通过它提供自己的 `ViewId`，并按需覆盖测量、绘制、命中测试、焦点、输入事件、tooltip、拖放和状态更新钩子。
+
+应用侧组合界面时通常使用独立控件库（例如 `flor_lys`）提供的控件，再配合 builder 做配置。只有在编写新控件、封装底层绘制逻辑或实现复杂交互时，才需要直接实现 `View`。
+
+控件作者应该把注意力放在 `on_*` 方法上。除了必须实现的 `view_id()`，以及临时调试用的 `tag()`，不要重写 `call_*`、`bus_*`、`visual_rect()` 这类非 `on_*` 派发方法；它们是框架内部调度层。
+
+## 最小控件
+
+每个控件必须保存自己的 `ViewId`。`view_id()` 只返回这个稳定字段，不要在 `view_id()` 里重新创建 ID。
+
+```rust
+use flor::view::{View, ViewId};
+
+pub struct Spacer {
+    view_id: ViewId,
+}
+
+impl Spacer {
+    pub fn new() -> Self {
+        Self {
+            view_id: ViewId::new(),
+        }
+    }
+}
+
+impl View for Spacer {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+}
+```
+
+默认控件不会绘制内容，测量结果是 `Size::ZERO`，命中测试按布局矩形判断。实际控件通常会覆盖 `on_draw`；是否覆盖 `on_measure` 取决于这个控件是否需要向布局系统声明自己的自然尺寸。
+
+`tag()` 默认返回 `"View"`。它目前主要是调试时临时识别控件类型的入口，后续可能调整或删除，不要把业务逻辑建立在 `tag()` 上。
+
+## 绘制与测量
+
+Flor 使用 Taffy 计算布局。布局阶段会调用 `on_measure`，绘制阶段会调用 `on_draw`。
+
+> `on_measure` 不是所有控件的必需能力。如果你希望控件支持响应式布局、内容自适应、按文字或图片计算自然尺寸，就需要实现测量，让框架知道控件需要多大的空间。如果是类 MFC 的纯固定布局场景，由调用方手动指定控件宽高，也可以不实现测量，直接依赖布局样式里的固定尺寸。
+
+```rust
+use flor::base::graphics::RenderContext;
+use flor::error::Error;
+use flor::render::FlorRenderer;
+use flor::taffy::{AvailableSpace, Size, Style};
+use flor::types::Color;
+use flor::view::resolver::ComputedLayout;
+use flor::view::{ControlState, View, ViewId};
+
+pub struct ColorBlock {
+    view_id: ViewId,
+    color: Color,
+}
+
+impl ColorBlock {
+    pub fn new(color: Color) -> Self {
+        Self {
+            view_id: ViewId::new(),
+            color,
+        }
+    }
+}
+
+impl View for ColorBlock {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn on_measure(
+        &mut self,
+        known_dimensions: Size<Option<f32>>,
+        _available_space: Size<AvailableSpace>,
+        _style: &Style,
+        _control_state: ControlState,
+        _render: &mut FlorRenderer,
+    ) -> Result<Size<f32>, Error> {
+        Ok(Size {
+            width: known_dimensions.width.unwrap_or(80.0),
+            height: known_dimensions.height.unwrap_or(32.0),
+        })
+    }
+
+    fn on_draw(
+        &mut self,
+        render: &mut FlorRenderer,
+        _control_state: ControlState,
+        abs_location: (f32, f32),
+        layout: ComputedLayout,
+    ) -> Result<(), Error> {
+        let brush = render.create_solid_color_brush(self.color, None)?;
+        render.fill_quad(
+            abs_location.0,
+            abs_location.1,
+            layout.size.width,
+            layout.size.height,
+            &brush,
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+}
+```
+
+`on_measure` 接收 Taffy 传入的已知尺寸、可用空间、当前 `Style`、当前 `ControlState` 和 renderer。文字控件通常会在这里创建 text layout 来测量内容；图片控件通常会根据图片尺寸、可用空间和缩放策略返回需要的尺寸。
+
+`on_draw` 接收 renderer、当前 `ControlState`、窗口坐标系里的绝对位置和计算后的布局。绘制时使用传入的 `abs_location` 和 `layout.size`，不要重新推导窗口坐标。子控件会在当前控件之后绘制；`on_draw_overlay` 会在子控件之后调用，适合滚动条、浮层装饰等覆盖层。
+
+## 生命周期与状态
+
+常用生命周期钩子包括：
+
+| 方法 | 调用时机 |
+| --- | --- |
+| `on_create` | 控件创建流程里调用，外置 `on_create` handler 也会在同一路径执行 |
+| `on_update_state` | `ViewId::update_state(Box<dyn Any>)` 被调用时执行 |
+| `on_frame` | 帧调度时执行，可返回下一次需要唤醒的等待时间 |
+| `on_child_push` | 子控件加入后通知父控件 |
+| `on_child_dispose` | 子控件释放后通知父控件 |
+
+### on_create
+
+`on_create` 在窗口创建流程遍历控件树时调用。框架实际走的是 `call_create`：先激活挂在这个 `ViewId` 上的 pending effect，再调用控件内部 `on_create`，最后调用用户通过 builder 绑定的外置 `on_create` handler。
+
+如果控件初始化依赖窗口、renderer 或已经进入控件树的上下文，可以放在 `on_create`。单纯字段初始化应该放在构造函数里，不要等到 `on_create`。
+
+### on_update_state
+
+`on_update_state` 是控件响应式更新的入口，通常和信号系统配合使用。控件库会创建 updater：在 compute 闭包里读取信号，在 on-change 闭包里调用 `ViewId::update_state(Box::new(...))`，最后由控件自己的 `on_update_state` downcast 并更新内部字段。
+
+`flor_lys::label` 和 `flor_lys::button` 都采用这个模式：标题可以是固定值，也可以是读取信号的闭包；信号变化后更新标题并请求重绘。
+
+```rust
+use flor::signal::create_updater;
+use flor::view::builder::StringProp;
+use flor::view::{View, ViewId};
+use std::any::Any;
+
+pub struct TitleView {
+    view_id: ViewId,
+    title: String,
+}
+
+impl TitleView {
+    pub fn new<P: StringProp>(title: P) -> Self {
+        let view_id = ViewId::new();
+        // 创建响应式更新器：读取信号值，变化时调用 update_state
+        let title = create_updater(
+            move || title.make(),
+            move |value| view_id.update_state(Box::new(value)),
+        );
+
+        Self { view_id, title }
+    }
+}
+
+impl View for TitleView {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn on_update_state(&mut self, state: Box<dyn Any>) {
+        // downcast 并更新内部字段
+        if let Ok(title) = state.downcast::<String>() {
+            self.title = *title;
+            // 注意：ViewId::update_state 已经会在调用后请求重绘，
+            // 所以这里不需要再调用 request_redraw()
+        }
+    }
+}
+```
+
+如果状态变化会影响自然尺寸，比如文字变化、图片句柄变化或字体样式变化，控件需要清理测量缓存，并在需要时标记所属窗口重新布局。只影响绘制的变化通常只需要请求重绘；`ViewId::update_state` 已经会在调用后请求重绘。
+
+### on_frame
+
+`on_frame` 用于动画和周期性状态推进。默认返回 `Ok(None)`，表示这个控件没有下一次主动唤醒需求。
+
+返回 `Ok(Some(duration))` 表示控件希望事件循环在不晚于这段时间后再次醒来。框架会遍历可见控件子树，把所有子控件返回的等待时间取最小值，再交给平台等待逻辑。也就是说，一个 GIF 控件返回下一帧剩余时间，输入控件返回光标闪烁间隔，最终会以最短的那个时间作为下一次唤醒目标。
+
+```rust
+use flor::error::Error;
+use flor::view::{View, ViewId};
+use std::time::{Duration, Instant};
+
+pub struct CursorView {
+    view_id: ViewId,
+    focused: bool,
+    cursor_visible: bool,
+    last_blink: Instant,
+}
+
+impl View for CursorView {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn on_frame(&mut self, now: Instant) -> Result<Option<Duration>, Error> {
+        // 如果没有焦点，不需要动画，返回 None 表示不需要唤醒
+        if !self.focused {
+            return Ok(None);
+        }
+
+        const BLINK: Duration = Duration::from_millis(530);
+        // 检查是否到达闪烁时间
+        if now.duration_since(self.last_blink) >= BLINK {
+            // 切换光标可见状态
+            self.cursor_visible = !self.cursor_visible;
+            self.last_blink = now;
+            // 重要：视觉状态变化后必须请求重绘
+            self.view_id.request_redraw();
+        }
+
+        // 返回下一次需要唤醒的时间
+        Ok(Some(BLINK))
+    }
+}
+```
+
+`flor_lys::image` 的 GIF 帧推进也是同一类用法：根据当前时间算出目标帧，帧变化时请求重绘，并返回距离下一帧的剩余时间。需要注意的是，当前 `bus_frame` 会跳过 `display: none` 和最近一次绘制未标记为可见的控件。
+
+#### on_frame_policy
+
+`on_frame_policy()` 默认返回 `FramePolicy::VisibleOnly`，当前公开枚举还有 `FramePolicy::Always`。当前调度路径还没有读取这个返回值；`bus_frame` 仍然按 `display != none` 和最近一次绘制得到的 `ViewId::visual()` 可见性缓存决定是否调用 `on_frame`。
+
+### on_child_push
+
+`on_child_push` 在子控件加入当前控件后调用。它主要给复合控件使用，例如记录当前有多少子控件、重建子控件索引、刷新内部缓存或同步辅助数据结构。
+
+`div` 也是复合控件类型，只是它本身没有额外的控件逻辑和绘制逻辑；框架已经提供了基础布局能力，所以简单容器可以不覆盖这个方法。
+
+### on_child_dispose
+
+`on_child_dispose` 在子控件从当前控件下释放后调用。它和 `on_child_push` 对应，适合清理复合控件维护的子控件计数、缓存、选择状态或命中辅助结构。
+
+这两个方法都发生在框架完成基础父子关系更新之后。控件作者不需要在这里手动写入 `VIEW_STORAGE.child_ids`。
+
+## class 更新
+
+启用 `class` feature 后，`ViewId::update_class` 会先解析状态前缀，例如 `hover:`、`focus:`、`active:`、`disabled:`，再把控件样式类交给：
+
+```rust
+fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error>;
+```
+
+控件可以在这里把类名转换成自己的样式更新。布局类仍然由 `LayoutResolver` 处理；`z-*` 会被解析成运行时 z-index，不会进入控件样式解析。
+
+## 焦点与键盘
+
+焦点表按 `(focus_index, ViewId, virtual_index)` 管理。控件可以覆盖这些方法：
+
+| 方法 | 作用 |
+| --- | --- |
+| `on_focus_count` | 声明这个控件有多少个虚拟焦点点位，默认 `1` |
+| `on_virtual_focus_at` | 点击时按鼠标位置决定要聚焦哪个虚拟焦点，默认 `0` |
+| `on_focus` | 当前控件获得某个虚拟焦点时调用 |
+| `on_blur` | 当前控件失去某个虚拟焦点时调用 |
+| `on_key_down` / `on_key_up` | 当前控件持有焦点时接收键盘事件 |
+| `on_ime_start` / `on_ime_input` / `on_ime_end` | 当前焦点控件接收 IME 输入流程 |
+
+`on_focus_count` 的返回值决定初始化焦点表时生成多少条虚拟焦点记录。比如返回 `3` 且这个控件设置了 `focus_index`，焦点表会为它生成虚拟序号 `0`、`1`、`2`。`on_virtual_focus_at` 则用于把一次点击映射到其中某个虚拟焦点。
+
+键盘方法返回 `HandleResult`。内部 `on_key_*` 和外置 handler 的返回值会合并：任意一方返回 `Handled`，最终就是 `Handled`。
+
+完整焦点机制见 [焦点机制](/zh/guide/use/focus)。运行时焦点 API 见 [ViewId](/zh/guide/control/view-id)。
+
+## 鼠标与滚轮事件
+
+鼠标事件通常在命中测试后派发给目标控件：
+
+| 方法 | 说明 |
+| --- | --- |
+| `on_mouse_enter` / `on_mouse_move` / `on_mouse_leave` | 鼠标进入、移动、离开 |
+| `on_button_down` / `on_button_up` / `on_click` / `on_double_click` | 左键按下、抬起、点击、双击 |
+| `on_right_button_*` | 右键事件 |
+| `on_middle_button_*` | 中键事件 |
+| `on_wheel_scroll_lines_changed` | 滚轮行滚动事件 |
+
+多数事件的 `call_*` 默认实现会先执行控件内部 `on_*`，再执行用户通过 builder 绑定的外置 handler。控件作者覆盖 `on_*`；`call_*` 是框架派发层，不要在控件实现里重写。
+
+## Tooltip 与拖放
+
+Tooltip 有独立的覆盖模式：
+
+```rust
+fn on_tooltip_show(&mut self, key_state: KeyState, mouse_position: MousePosition) -> Result<(), Error>;
+fn on_tooltip_hide(&mut self) -> Result<(), Error>;
+```
+
+如果用户绑定了 tooltip handler，框架只执行外置 handler；没有绑定时才调用控件的 `on_tooltip_show` 或 `on_tooltip_hide`。
+
+拖放方法受 `drag-drop` feature 控制：
+
+| 方法 | 返回 |
+| --- | --- |
+| `on_drag_enter` | `Result<DropEffect, Error>` |
+| `on_drag_over` | `Result<DropEffect, Error>` |
+| `on_drag_leave` | `Result<(), Error>` |
+| `on_drop` | `Result<DropEffect, Error>` |
+
+`drag_enter`、`drag_over` 和 `drop` 的外置 handler 可以通过 `&mut DropEffect` 修改最终效果。
+
+## 命中测试
+
+命中测试是给异型视觉控件提供的能力，绝大多数控件都不需要重写。默认实现已经能处理矩形布局框的命中判断。
+
+命中测试从窗口坐标开始，框架会用 accumulated transform 把鼠标位置转换为每个控件的局部坐标。传给下面两个方法的 `mouse_position` 都是控件局部坐标：
+
+```rust
+fn on_hit_test_overlay(&self, mouse_position: MousePosition, key_state: KeyState) -> bool;
+fn on_hit_test(&self, mouse_position: MousePosition, key_state: KeyState) -> bool;
+```
+
+每个节点的调用顺序是：
+
+1. 如果控件未被最近一次绘制标记为可见、`display: none`，或鼠标不在父级裁剪区域内，跳过这个分支。
+2. 先调用当前控件的 `on_hit_test_overlay`。它命中时直接返回当前控件，不再检查子节点。
+3. 如果 overlay 没命中，再按反向绘制顺序检查子控件。后绘制的子控件先测试，符合上层元素优先命中的直觉。
+4. 子控件都没命中时，最后调用当前控件的 `on_hit_test`。
+
+`on_hit_test_overlay` 用于"覆盖在子控件之上"的区域，比如滚动条、拖拽调整手柄、浮动按钮。默认实现会根据布局里的 scrollbar size 判断滚动条区域。
+
+`on_hit_test` 用于控件主体区域。默认实现判断点是否在 `(0, 0, width, height)` 布局矩形内。只有需要圆形按钮、不规则路径、透明区域穿透、扩大点击热区时，才需要覆盖这个方法。
+
+命中测试只决定事件目标。控件的可见区域裁剪、绘制是否发生、焦点是否可获得，都由其他机制决定。
+
+## 控件状态
+
+Flor 内部继承了控件状态机制，很多方法都会接收 `ControlState` 参数。绘制和测量都会收到这个状态，状态优先级是 `Disabled > Active > Focus > Hover > Normal`。
+
+控件应该用这个状态读取自己的样式 resolver，或者选择不同绘制分支。禁用状态不是 `View` trait 上的控件开发方法。应用侧通过 [禁用 Builder](/zh/guide/use/builder/disable) 设置 `ViewState.disable`；控件作者只需要正确响应 `ControlState::Disabled`，例如绘制禁用样式、忽略输入或改变命中行为。
+
+## 可见区域
+
+布局刷新完成后，框架会遍历控件树，调用每个控件的 `visual_rect()` 并缓存到 `VIEW_STORAGE.visual_rect`。默认 `visual_rect()` 使用布局边界；它内部会读取 `on_visual_overflow()` 来扩展这个边界。
+
+绘制阶段会读取缓存的 `visual_rect`。如果一个控件的可见矩形和父级裁剪区域没有交集，框架会跳过这个控件，不调用 `on_draw`，也不会把它写入 `VIEW_STORAGE.visual`。如果没有被剔除，框架先写入可见标记，再派发 `on_draw`。
+
+控件作者不要重写 `visual_rect()`，应该覆盖：
+
+```rust
+fn on_visual_overflow(&self) -> VisualOverflow;
+```
+
+这个方法有两个主要用途：
+
+- 控件会画到布局框之外时，扩大可见区域。比如阴影、外发光、focus ring、tooltip 箭头。
+- 异形控件或不规则路径控件需要用更准确的 bounds 参与可见性判断，避免明明画面有内容，却因为默认布局框太小而被漏掉可见标记。
+
+`VisualOverflow::Uniform` 适合四周等距扩散，`Custom` 适合带方向偏移的阴影，`Path` 会使用路径 bounds。它影响的是可见性剔除和可见标记，不等于像素级裁剪或命中测试；命中测试仍然应该由 `on_hit_test` / `on_hit_test_overlay` 自己决定。
+
+## 资源加载
+
+所有 `View: LoadRenderResource` 都可以通过自己的 `view_id()` 找到所属窗口 renderer，并创建渲染资源：
+
+```rust
+use flor::render::LoadRenderResource;
+
+let handle = self.load_image(bytes)?;
+```
+
+`load_raw_image` 支持原始帧数据，启用 `svg` feature 后支持 `load_svg`。如果控件还没有关联到 renderer，会返回 `FlorRendererError::RenderNotFound`。
+
+## VIEW_STORAGE
+
+如果需要更底层的数据能力访问，可以使用 `VIEW_STORAGE` 全局变量。它存储了控件树、布局状态、可见性缓存、焦点表等运行时数据。大多数控件开发场景不需要直接访问 `VIEW_STORAGE`，优先使用 `ViewId` 提供的方法。

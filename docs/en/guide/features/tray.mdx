@@ -1,0 +1,71 @@
+# System Tray
+
+`tray` feature is used to enable system tray icon capability. After enabling can add, update, delete tray icons, and receive mouse events on tray icons.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "tray"] }
+```
+
+## Basic Usage
+
+Tray capability is exposed through `FlorGui`. `FlorGui.init()?` will initialize tray所需的 internal window.
+
+```rust
+use flor::base::platform::{IconSource, TrayEvent, TrayOptions};
+use flor::FlorGui;
+
+FlorGui.init()?;
+
+FlorGui.tray_on_callback(|tray_id, event| {
+    println!("tray {tray_id:?}: {event:?}");
+});
+
+let tray_id = FlorGui.tray_add(&TrayOptions {
+    icon_path: Some(IconSource::from_path("app.ico".into())),
+    tooltip: "Flor".to_string(),
+})?;
+```
+
+## Related Types
+
+Tray functionality will use these types:
+
+| Type | Purpose |
+| --- | --- |
+| `TrayOptions` | Configuration passed when creating or updating tray icon. Currently contains `icon_path` and `tooltip`. |
+| `IconSource` | Icon source, can come from disk file, can also come from RGBA pixel data. |
+| `TrayId` | Tray icon ID returned by `tray_add(...)`, subsequent update, delete and event callback will all use it. |
+| `TrayEvent` | Mouse event triggered by tray icon. |
+| `MouseButton` | Mouse button carried in `TrayEvent`, includes `Left`, `Right`, `Middle`. |
+
+`TrayEvent` currently includes:
+
+| Value | Meaning |
+| --- | --- |
+| `TrayEvent::MouseDown(button)` | Mouse button down. |
+| `TrayEvent::MouseUp(button)` | Mouse button up. |
+| `TrayEvent::MouseDoubleClick(button)` | Mouse double click. |
+| `TrayEvent::MouseEnter` | Mouse enters tray icon area. |
+| `TrayEvent::MouseLeave` | Mouse leaves tray icon area. |
+| `TrayEvent::MouseMove` | Mouse moves on tray icon. |
+
+## Icon Source
+
+Tray icon is specified through `IconSource`:
+
+| Writing | Purpose |
+| --- | --- |
+| `IconSource::from_path(path)` | Load icon file from disk. Windows currently适合传 `.ico`. |
+| `IconSource::from_raw(width, height, rgba_data)` | Create icon from RGBA pixel data. |
+
+Update and delete:
+
+```rust
+FlorGui.tray_update(tray_id, &TrayOptions {
+    icon_path: None,
+    tooltip: "New Tooltip Text".to_string(),
+})?;
+
+FlorGui.tray_remove(tray_id)?;
+```

@@ -1,0 +1,368 @@
+# Handler API
+
+本页用于查询 `flor::view::handler` 和 `flor::view::builder::EventBuilder` 的主要公开 API。使用教程见 [外置事件](/zh/guide/use/handler)。
+
+## 导入
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor::view::handler::*;
+
+use flor::base::platform::{
+    HandleResult, KeyCode, KeyState, MousePosition, ScrollAxis,
+};
+```
+
+启用拖放或主题 feature 后，还会用到这些类型：
+
+```rust
+use flor::base::platform::{DragData, DragFormat, DropEffect};
+use flor::base::platform::ThemeMode;
+```
+
+## `EventBuilder`
+
+`EventBuilder` 对所有 `V: View` 实现。所有方法都会保存 handler 并返回 `Self`，用于链式调用。
+
+```rust
+pub trait EventBuilder {
+    fn on_mouse_move(self, handler: impl Into<OnMouseMoveHandler>) -> Self;
+    fn on_double_click(self, handler: impl Into<OnDoubleClickHandler>) -> Self;
+    fn on_click(self, handler: impl Into<OnClickHandler>) -> Self;
+    fn on_button_down(self, handler: impl Into<OnButtonDownHandler>) -> Self;
+    fn on_button_up(self, handler: impl Into<OnButtonUpHandler>) -> Self;
+
+    fn on_right_button_double_click(
+        self,
+        handler: impl Into<OnRightButtonDoubleClickHandler>,
+    ) -> Self;
+    fn on_right_button_click(self, handler: impl Into<OnRightButtonClickHandler>) -> Self;
+    fn on_right_button_down(self, handler: impl Into<OnRightButtonDownHandler>) -> Self;
+    fn on_right_button_up(self, handler: impl Into<OnRightButtonUpHandler>) -> Self;
+
+    fn on_middle_button_double_click(
+        self,
+        handler: impl Into<OnMiddleButtonDoubleClickHandler>,
+    ) -> Self;
+    fn on_middle_button_down(self, handler: impl Into<OnMiddleButtonDownHandler>) -> Self;
+    fn on_middle_button_up(self, handler: impl Into<OnMiddleButtonUpHandler>) -> Self;
+
+    fn on_context_menu(self, handler: impl Into<OnContextMenuHandler>) -> Self;
+
+    fn on_key_down(self, handler: impl Into<OnKeyDownHandler>) -> Self;
+    fn on_key_up(self, handler: impl Into<OnKeyUpHandler>) -> Self;
+
+    fn on_mouse_enter(self, handler: impl Into<OnMouseEnterHandler>) -> Self;
+    fn on_mouse_leave(self, handler: impl Into<OnMouseLeaveHandler>) -> Self;
+    fn on_focus(self, handler: impl Into<OnFocusHandler>) -> Self;
+    fn on_blur(self, handler: impl Into<OnBlurHandler>) -> Self;
+    fn on_create(self, handler: impl Into<OnCreateHandler>) -> Self;
+    fn on_destroy(self, handler: impl Into<OnDestroyHandler>) -> Self;
+
+    fn on_resize(self, handler: impl Into<OnResizeHandler>) -> Self;
+    fn on_close_requested(self, handler: impl Into<OnCloseRequestedHandler>) -> Self;
+    fn on_work_area_changed(self, handler: impl Into<OnWorkAreaChangedHandler>) -> Self;
+    fn on_wheel_settings_changed(
+        self,
+        handler: impl Into<OnWheelSettingsChangedHandler>,
+    ) -> Self;
+    fn on_dpi_change(self, handler: impl Into<OnDpiChangeHandler>) -> Self;
+
+    #[cfg(feature = "theme-change")]
+    fn on_theme_changed(self, handler: impl Into<OnThemeChangedHandler>) -> Self;
+
+    #[cfg(feature = "drag-drop")]
+    fn on_drag_enter(self, handler: impl Into<OnDragEnterHandler>) -> Self;
+    #[cfg(feature = "drag-drop")]
+    fn on_drag_over(self, handler: impl Into<OnDragOverHandler>) -> Self;
+    #[cfg(feature = "drag-drop")]
+    fn on_drag_leave(self, handler: impl Into<OnDragLeaveHandler>) -> Self;
+    #[cfg(feature = "drag-drop")]
+    fn on_drop(self, handler: impl Into<DropHandler>) -> Self;
+}
+```
+
+## 当前派发状态
+
+| API | 当前状态 |
+| --- | --- |
+| `on_mouse_move` | 已派发。目标是捕获鼠标的控件或当前 hover 控件 |
+| `on_mouse_enter` / `on_mouse_leave` | 已派发。hover 目标变化时触发 |
+| `on_button_down` / `on_button_up` | 已派发。左键 down/up |
+| `on_click` | 已派发。左键 down/up 命中同一控件时合成 |
+| `on_double_click` | 已派发。左键双击 |
+| `on_right_button_down` / `on_right_button_up` | 已派发。右键 down/up |
+| `on_right_button_click` | 已派发。右键 down/up 命中同一控件时合成 |
+| `on_right_button_double_click` | 已派发。右键双击 |
+| `on_middle_button_down` / `on_middle_button_up` | 已派发。中键 down/up |
+| `on_middle_button_double_click` | 已派发。中键双击 |
+| `on_key_down` / `on_key_up` | 已派发。目标是当前焦点控件 |
+| `on_focus` / `on_blur` | 已派发。由焦点管理器触发 |
+| `on_create` | 已派发。窗口创建控件树后触发 |
+| `on_wheel_settings_changed` | 已派发。当前鼠标滚轮消息会走这个 handler |
+| `on_drag_enter` / `on_drag_over` / `on_drag_leave` / `on_drop` | 已派发，需要 `drag-drop` feature |
+| `on_context_menu` | 有绑定槽位，当前源码没有外置派发入口 |
+| `on_destroy` | 有绑定槽位，当前源码没有外置派发入口 |
+| `on_resize` | 有绑定槽位，当前 Resize 只更新布局和渲染尺寸，没有调用外置 handler |
+| `on_close_requested` | 有绑定槽位，当前关闭请求没有调用外置 handler |
+| `on_work_area_changed` | 有绑定槽位，当前窗口总线实现为空 |
+| `on_dpi_change` | 有绑定槽位，当前 DPI 消息只更新渲染器、单位和布局，没有调用外置 handler |
+| `on_theme_changed` | 有绑定槽位，需要 `theme-change` feature，当前窗口总线实现为空 |
+
+## `ViewHandler`
+
+`ViewHandler` 是每个 `ViewId` 对应的一组 handler 槽位。应用代码通常通过 `EventBuilder` 写入这些槽位，不需要直接操作 `ViewHandler`。
+
+```rust
+#[derive(Default)]
+pub struct ViewHandler {
+    pub on_mouse_move_handler: Option<OnMouseMoveHandler>,
+    pub on_double_click_handler: Option<OnDoubleClickHandler>,
+    pub on_click_handler: Option<OnClickHandler>,
+    pub on_button_down_handler: Option<OnButtonDownHandler>,
+    pub on_button_up_handler: Option<OnButtonUpHandler>,
+
+    pub on_right_button_double_click_handler: Option<OnRightButtonDoubleClickHandler>,
+    pub on_right_button_click_handler: Option<OnRightButtonClickHandler>,
+    pub on_right_button_down_handler: Option<OnRightButtonDownHandler>,
+    pub on_right_button_up_handler: Option<OnRightButtonUpHandler>,
+
+    pub on_middle_button_double_click_handler: Option<OnMiddleButtonDoubleClickHandler>,
+    pub on_middle_button_down_handler: Option<OnMiddleButtonDownHandler>,
+    pub on_middle_button_up_handler: Option<OnMiddleButtonUpHandler>,
+
+    pub on_context_menu_handler: Option<OnContextMenuHandler>,
+
+    pub on_key_down_handler: Option<OnKeyDownHandler>,
+    pub on_key_up_handler: Option<OnKeyUpHandler>,
+
+    pub on_mouse_enter_handler: Option<OnMouseEnterHandler>,
+    pub on_mouse_leave_handler: Option<OnMouseLeaveHandler>,
+    pub on_focus_handler: Option<OnFocusHandler>,
+    pub on_blur_handler: Option<OnBlurHandler>,
+    pub on_create_handler: Option<OnCreateHandler>,
+    pub on_destroy_handler: Option<OnDestroyHandler>,
+
+    pub on_tooltip_show_handler: Option<OnTooltipShowHandler>,
+    pub on_tooltip_hide_handler: Option<OnTooltipHideHandler>,
+
+    pub on_resize_handler: Option<OnResizeHandler>,
+    pub on_close_requested_handler: Option<OnCloseRequestedHandler>,
+    pub on_work_area_changed_handler: Option<OnWorkAreaChangedHandler>,
+    pub on_wheel_settings_changed_handler: Option<OnWheelSettingsChangedHandler>,
+    pub on_dpi_change_handler: Option<OnDpiChangeHandler>,
+
+    #[cfg(feature = "theme-change")]
+    pub on_theme_changed_handler: Option<OnThemeChangedHandler>,
+
+    #[cfg(feature = "drag-drop")]
+    pub on_drag_enter_handler: Option<OnDragEnterHandler>,
+    #[cfg(feature = "drag-drop")]
+    pub on_drag_over_handler: Option<OnDragOverHandler>,
+    #[cfg(feature = "drag-drop")]
+    pub on_drag_leave_handler: Option<OnDragLeaveHandler>,
+    #[cfg(feature = "drag-drop")]
+    pub on_drop_handler: Option<DropHandler>,
+}
+```
+
+## Handler 包装类型
+
+所有 handler 包装类型都实现了 `From<F>`，其中 `F` 是对应签名的闭包或函数，并满足 `Send + Sync + 'static`。因此用户侧通常直接传闭包，不需要手动构造包装类型。
+
+### `Handler`
+
+```rust
+pub struct Handler(pub Arc<dyn Fn(ViewId) + Send + Sync + 'static>);
+```
+
+用于只需要 `ViewId` 的事件。
+
+### `MouseHandler`
+
+```rust
+pub struct MouseHandler(
+    pub Arc<dyn Fn(ViewId, KeyState, MousePosition) + Send + Sync + 'static>,
+);
+```
+
+用于鼠标移动、点击、按下、松开、双击等事件。
+
+### `KeyHandler`
+
+```rust
+pub struct KeyHandler(
+    pub Arc<
+        dyn Fn(ViewId, KeyCode, bool, bool, bool) -> HandleResult
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+参数依次是 `ViewId`、`KeyCode`、`is_alt`、`is_ctrl`、`is_shift`。
+
+### `FocusHandler`
+
+```rust
+pub struct FocusHandler(
+    pub Arc<dyn Fn(ViewId, u16) + Send + Sync + 'static>,
+);
+```
+
+第二个参数是虚拟焦点序号。
+
+### `OnWheelSettingsChangedHandler`
+
+```rust
+pub struct OnWheelSettingsChangedHandler(
+    pub Arc<
+        dyn Fn(ViewId, ScrollAxis, f32, KeyState, MousePosition)
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+参数依次是 `ViewId`、滚动方向、滚动量、按键状态、鼠标位置。
+
+### `OnDpiChangeHandler`
+
+```rust
+pub struct OnDpiChangeHandler(
+    pub Arc<dyn Fn(ViewId, f32, f32) + Send + Sync + 'static>,
+);
+```
+
+第二、第三个参数分别是 `dpi_x` 和 `dpi_y`。
+
+### `OnThemeChangedHandler`
+
+需要 `theme-change` feature。
+
+```rust
+pub struct OnThemeChangedHandler(
+    pub Arc<dyn Fn(ViewId, ThemeMode) + Send + Sync + 'static>,
+);
+```
+
+### `DragEnterOverHandler`
+
+需要 `drag-drop` feature。
+
+```rust
+pub struct DragEnterOverHandler(
+    pub Arc<
+        dyn Fn(ViewId, KeyState, MousePosition, &[DragFormat], &mut DropEffect)
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+用于 `on_drag_enter` 和 `on_drag_over`。
+
+### `DropHandler`
+
+需要 `drag-drop` feature。
+
+```rust
+pub struct DropHandler(
+    pub Arc<
+        dyn Fn(ViewId, KeyState, MousePosition, &DragData, &mut DropEffect)
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+用于 `on_drop`。
+
+## 类型别名
+
+### 鼠标事件
+
+| 别名 | 底层类型 |
+| --- | --- |
+| `OnMouseMoveHandler` | `MouseHandler` |
+| `OnDoubleClickHandler` | `MouseHandler` |
+| `OnClickHandler` | `MouseHandler` |
+| `OnButtonDownHandler` | `MouseHandler` |
+| `OnButtonUpHandler` | `MouseHandler` |
+| `OnRightButtonDoubleClickHandler` | `MouseHandler` |
+| `OnRightButtonClickHandler` | `MouseHandler` |
+| `OnRightButtonDownHandler` | `MouseHandler` |
+| `OnRightButtonUpHandler` | `MouseHandler` |
+| `OnMiddleButtonDoubleClickHandler` | `MouseHandler` |
+| `OnMiddleButtonDownHandler` | `MouseHandler` |
+| `OnMiddleButtonUpHandler` | `MouseHandler` |
+| `OnContextMenuHandler` | `MouseHandler` |
+
+当前没有 `OnMiddleButtonClickHandler`。
+
+### 键盘事件
+
+| 别名 | 底层类型 |
+| --- | --- |
+| `OnKeyDownHandler` | `KeyHandler` |
+| `OnKeyUpHandler` | `KeyHandler` |
+
+### View 与生命周期事件
+
+| 别名 | 底层类型 |
+| --- | --- |
+| `OnMouseEnterHandler` | `Handler` |
+| `OnMouseLeaveHandler` | `Handler` |
+| `OnFocusHandler` | `FocusHandler` |
+| `OnBlurHandler` | `FocusHandler` |
+| `OnCreateHandler` | `Handler` |
+| `OnDestroyHandler` | `Handler` |
+
+### Tooltip 事件
+
+| 别名 | 底层类型 |
+| --- | --- |
+| `OnTooltipShowHandler` | `MouseHandler` |
+| `OnTooltipHideHandler` | `Handler` |
+
+当前 `EventBuilder` 没有公开 tooltip 对应的链式绑定方法。
+
+### 窗口相关事件
+
+| 别名 | 底层类型 |
+| --- | --- |
+| `OnResizeHandler` | `Handler` |
+| `OnCloseRequestedHandler` | `Handler` |
+| `OnWorkAreaChangedHandler` | `Handler` |
+| `OnWheelSettingsChangedHandler` | 独立包装类型 |
+| `OnDpiChangeHandler` | 独立包装类型 |
+| `OnThemeChangedHandler` | 独立包装类型，需要 `theme-change` feature |
+
+### 拖放事件
+
+需要 `drag-drop` feature。
+
+| 别名 | 底层类型 |
+| --- | --- |
+| `OnDragEnterHandler` | `DragEnterOverHandler` |
+| `OnDragOverHandler` | `DragEnterOverHandler` |
+| `OnDragLeaveHandler` | `Handler` |
+| `DropHandler` | 独立包装类型 |
+
+## 参数说明
+
+| 类型 | 说明 |
+| --- | --- |
+| `ViewId` | 触发事件的目标控件 ID |
+| `KeyState` | 鼠标按钮和修饰键状态 |
+| `MousePosition` | 鼠标坐标。常规鼠标命中事件是目标控件局部坐标；滚轮和拖放当前是窗口客户区坐标 |
+| `KeyCode` | 按键枚举。常见按键有字母、数字、方向键、功能键、`Enter`、`Escape`、`Tab`、`Backspace`、`Space`、`Delete` |
+| `HandleResult` | 键盘事件处理结果，`Handled` 表示已处理，`Default` 表示走默认处理 |
+| `ScrollAxis` | `Vertical` 或 `Horizontal` |
+| `DropEffect` | 拖放反馈效果，常用 `None`、`Copy`、`Move`、`Link` |
+| `DragFormat` | 拖放进入/悬停阶段可用的数据格式 |
+| `DragData` | drop 阶段真正传入的数据 |

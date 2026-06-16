@@ -1,0 +1,40 @@
+# AI
+
+Flor's [Framework DSL](/en/guide/use/framework-dsl) has similarities with React's functional UI expression.
+
+This means when using AI to assist writing Flor interfaces, AI doesn't necessarily need prior training specifically for Flor. Since many large models have already formed strong understanding capabilities on React, JSX, functional components, declarative UI etc., Flor's DSL can to some extent reuse this expression habit.
+
+In other words, when you describe an interface structure to AI, it can leverage its understanding of React-style UI organization to quickly migrate to Flor's DSL, helping you complete rapid interface building, structure adjustment and style organization. For specific widget encapsulation writing, see [Framework DSL](/en/guide/use/framework-dsl).
+
+This is another manifestation of Flor's "want everything, want more, want even more" philosophy:
+
+Want the clear structure of widget-based development from traditional GUI frameworks,
+Want the expression efficiency of modern frontend declarative UI,
+Want to尽可能 utilize the functional UI thinking AI is already familiar with, making layout design easier to generate, modify and iterate.
+
+Of course, a quiet word: Flor's initial design wasn't deliberately created to fit AI usage scenarios. It just naturally evolved along DSL API design, and only later discovered that this design is naturally suitable for AI understanding and generation.
+
+Therefore, Flor's documentation site also chose a documentation framework with AI support capabilities to build. Besides regular documentation for developers to read, this site also provides documentation entries for large language models, convenient for you to provide more model-readable materials when using AI-assisted development.
+
+If you want AI to help you write Flor interfaces, explain Flor's DSL, or quickly generate a layout from description, prioritize using the LLM documentation links provided below.
+
+## llms.txt
+
+[llms.txt](https://llmstxt.org/) is a standard specification helping LLMs discover and use project documentation. Rspress follows this specification and publishes the following two files:
+
+- <a href="/llms.txt">llms.txt</a>: Structured index file, containing titles, links and brief descriptions of all documentation pages.
+
+```
+/llms.txt
+```
+
+- <a href="/llms-full.txt">llms-full.txt</a>: Complete content file, merging all documentation page content into a single file.
+
+```
+/llms-full.txt
+```
+
+You can choose appropriate files based on usage scenarios:
+
+- `llms.txt` is smaller, consumes fewer tokens, suitable for letting AI fetch specific pages as needed.
+- `llms-full.txt` contains full documentation content, no need for AI to follow links one by one, suitable for scenarios where AI needs comprehensive understanding of Flor, but will consume more tokens, recommended to use in AI tools supporting large context windows.

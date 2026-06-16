@@ -1,0 +1,186 @@
+# 样式单位
+
+Flor 的布局系统使用 `Unit` 和 `Length` 类型表示尺寸单位。所有单位在传递给布局引擎前都会转换为像素值。
+
+```rust
+use flor::view::resolver::{Unit, Length};
+```
+
+## Unit
+
+`Unit` 是单位类型标记，用于标记数值属于哪种单位系统。
+
+```rust
+pub enum Unit {
+    /// 像素，不进行转换
+    #[default]
+    Px,
+
+    /// 点，使用窗口 DPI 转换：1pt = dpi / 72px
+    Pt,
+
+    /// Root em，使用窗口配置的 rem_px 转换
+    Rem,
+
+    /// 视口宽度单位，1vw = 客户区宽度的 1%
+    Vw,
+
+    /// 视口高度单位，1vh = 客户区高度的 1%
+    Vh,
+}
+```
+
+默认值是 `Unit::Px`。
+
+### Px（像素）
+
+像素是绝对单位，不进行任何转换。布局引擎直接使用像素值。
+
+```rust
+let unit = Unit::Px;
+```
+
+### Pt（点）
+
+点（Point）是印刷单位，使用窗口 DPI 进行转换：
+
+```
+1pt = dpi / 72px
+```
+
+在标准 96 DPI 下，`1pt = 1.333px`，`12pt = 16px`。
+
+```rust
+let unit = Unit::Pt;
+```
+
+### Rem（Root em）
+
+Rem 是相对于根元素字体大小的单位。Flor 使用窗口配置的 `rem_px` 作为换算基准：
+
+```
+1rem = rem_px px
+```
+
+默认 `rem_px = 16.0`，即 `1rem = 16px`。
+
+```rust
+let unit = Unit::Rem;
+```
+
+### Vw（视口宽度）
+
+Vw 是相对于视口宽度的单位：
+
+```
+1vw = viewport_width / 100 px
+```
+
+视口宽度等于窗口客户区宽度。`50vw` 表示视口宽度的一半。
+
+```rust
+let unit = Unit::Vw;
+```
+
+### Vh（视口高度）
+
+Vh 是相对于视口高度的单位：
+
+```
+1vh = viewport_height / 100 px
+```
+
+视口高度等于窗口客户区高度。`50vh` 表示视口高度的一半。
+
+```rust
+let unit = Unit::Vh;
+```
+
+## Length
+
+`Length` 是带数值的长度类型，将数值和单位绑定在一起。
+
+```rust
+pub enum Length {
+    /// 像素值
+    Px(f32),
+
+    /// 点值
+    Pt(f32),
+
+    /// Root em 值
+    Rem(f32),
+
+    /// 视口宽度值
+    Vw(f32),
+
+    /// 视口高度值
+    Vh(f32),
+}
+```
+
+示例：
+
+```rust
+let length = Length::Px(16.0);     // 16 像素
+let length = Length::Rem(1.0);     // 1 rem
+let length = Length::Vw(50.0);     // 50% 视口宽度
+```
+
+## UnitMetrics
+
+`UnitMetrics` 存储窗口级别的单位换算参数，每个窗口维护一份实例。
+
+```rust
+pub struct UnitMetrics {
+    /// 1rem 对应的像素值，默认 16.0
+    pub rem_px: AtomicF32,
+
+    /// 水平 DPI，默认 96.0
+    pub dpi_x: AtomicF32,
+
+    /// 垂直 DPI，默认 96.0
+    pub dpi_y: AtomicF32,
+
+    /// 视口宽度（客户区宽度，像素）
+    pub viewport_width: AtomicF32,
+
+    /// 视口高度（客户区高度，像素）
+    pub viewport_height: AtomicF32,
+}
+```
+
+### 默认值
+
+| 参数 | 默认值 |
+| --- | --- |
+| `rem_px` | 16.0 |
+| `dpi_x` | 96.0 |
+| `dpi_y` | 96.0 |
+| `viewport_width` | 1024.0 |
+| `viewport_height` | 768.0 |
+
+### 更新时机
+
+这些值在窗口创建时初始化，并在以下时机更新：
+
+- 窗口尺寸变化时，更新 `viewport_width` 和 `viewport_height`
+- DPI 变化时，更新 `dpi_x` 和 `dpi_y`
+- 用户修改 `WindowOption::rem_px` 时，更新 `rem_px`
+
+## 单位换算公式
+
+| 单位 | 公式 | 示例（默认参数） |
+| --- | --- | --- |
+| Px | 不转换 | `16px` → `16px` |
+| Pt | `pt * dpi_y / 72` | `12pt` (dpi=96) → `16px` |
+| Rem | `rem * rem_px` | `1rem` (rem_px=16) → `16px` |
+| Vw | `vw * viewport_width / 100` | `50vw` (width=1024) → `512px` |
+| Vh | `vh * viewport_height / 100` | `50vh` (height=768) → `384px` |
+
+## 使用建议
+
+- **Px**：用于精确尺寸，如边框宽度、图标尺寸
+- **Rem**：用于字体大小、间距，便于响应式设计
+- **Pt**：用于印刷相关场景，或需要与 CSS pt 保持一致时
+- **Vw / Vh**：用于视口相关布局，如全屏容器、居中定位

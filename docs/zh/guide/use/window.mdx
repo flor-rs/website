@@ -1,0 +1,171 @@
+## 窗口创建与控制
+
+窗口由 `WindowOption` 创建，创建成功后返回当前窗口的 `WindowId`。
+
+```rust
+use flor::windows::WindowOption;
+use flor_lys::label::label;
+
+let window_id = WindowOption {
+    title: "Hello Flor".to_string(),
+    width: 800,
+    height: 600,
+    ..WindowOption::default()
+}
+.open(move |_window_id| {
+    label("hello flor ~")
+})?;
+```
+
+`WindowOption` 负责窗口的初始配置：
+
+```rust
+pub struct WindowOption {
+    pub title: String,
+    pub width: u32,
+    pub height: u32,
+    pub rem_px: f32,
+    pub wait_v_sync: bool,
+    pub show_fps: bool,
+    pub continuous_rendering: bool,
+    pub background_color: Color,
+    pub tooltip_delay: Duration,
+}
+```
+
+默认值如下：
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `title` | `"Window"` | 窗口标题。 |
+| `width` | `800` | 初始窗口宽度。 |
+| `height` | `600` | 初始窗口高度。 |
+| `rem_px` | `16.0` | 当前窗口中 `1rem` 对应的像素值。 |
+| `wait_v_sync` | `true` | 渲染后端是否等待垂直同步。 |
+| `show_fps` | `false` | 是否显示 FPS。 |
+| `continuous_rendering` | `false` | 是否持续请求重绘。 |
+| `background_color` | `Color::rgb(255, 255, 255)` | 窗口背景色。 |
+| `tooltip_delay` | `Duration::from_millis(500)` | tooltip 响应延迟。 |
+
+`continuous_rendering` 只控制事件循环是否持续触发重绘，不会改变 Flor 的界面模型。普通 GUI 应用保持默认值即可；动画、实时预览、游戏循环这类需要每帧刷新的场景再设为 `true`。
+
+## open 的视图函数
+
+`open` 的签名是：
+
+```rust
+pub fn open<F, V>(self, view_fn: F) -> Result<WindowId, Error>
+where
+    F: Fn(WindowId) -> V + Send + Sync + 'static,
+    V: IntoViewIter,
+```
+
+`view_fn` 是窗口根视图的构建函数。Flor 创建平台窗口、渲染器和窗口入口后，会把当前窗口的 `WindowId` 传给它，并把返回值转换为窗口根控件树。
+
+```rust
+use flor::platform::WindowId;
+use flor::view::View;
+use flor_lys::label::label;
+
+fn build_view(_window_id: WindowId) -> impl View {
+    label("hello flor ~")
+}
+
+WindowOption::default().open(build_view)?;
+```
+
+如果不需要使用窗口 ID，就写成 `_window_id`。
+
+## open 参数里的 WindowId 怎么用
+
+`open(move |window_id| { ... })` 里的 `window_id` 不建议在根视图构建阶段直接调用窗口控制方法。此时窗口正在完成初始化，Flor 还在挂载根视图、注册渲染器、初始化焦点和刷新布局；在这个闭包里直接 `set_size`、`set_window_mode`、`request_redraw`、`destroy` 等，容易让初始化顺序超出预期，产生额外重绘、布局状态不同步或平台层行为问题。
+
+这个 `WindowId` 更适合被捕获到控件事件里，用来在后续事件中操控当前窗口：
+
+```rust
+use flor::platform::base::WindowApi;
+use flor::view::builder::EventBuilder;
+use flor_lys::button::button;
+
+WindowOption::default().open(move |window_id| {
+    button("关闭窗口").on_click(move |_, _, _| {
+        let _ = window_id.destroy();
+    })
+})?;
+```
+
+如果只是设置初始标题、尺寸、背景色、刷新模式，应优先写在 `WindowOption` 字段里，而不是在 `open` 的闭包里再改。
+
+## WindowId
+
+`WindowId` 是平台窗口的句柄封装。当前 Windows 平台实现中它是：
+
+```rust
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct WindowId(pub isize);
+```
+
+它实现了 `WindowApi` 和 `WindowOperations`。调用这些方法时需要导入 trait：
+
+```rust
+use flor::platform::base::{WindowApi, WindowOperations};
+use flor::platform::WindowId;
+```
+
+### 创建与生命周期
+
+| API | 作用 | 使用建议 |
+| --- | --- | --- |
+| `WindowOption::open(view_fn)` | 创建 Flor 窗口并挂载根视图。 | 应用侧优先使用这个入口。 |
+| `WindowApi::create_window(title, width, height)` | 只创建平台窗口。 | 框架内部使用；普通应用不要绕过 `WindowOption::open`。 |
+| `update_window()` | 同步触发平台窗口更新。 | 初始化流程内部会调用；应用侧通常不用手动调用。 |
+| `destroy()` | 销毁窗口。 | 适合放在按钮点击、菜单命令等事件中调用。 |
+
+### 显示与窗口模式
+
+| API | 作用 |
+| --- | --- |
+| `show()` | 显示窗口。 |
+| `hide()` | 隐藏窗口。 |
+| `set_window_mode(mode)` | 设置窗口模式。 |
+| `get_window_mode()` | 读取当前窗口模式。 |
+
+`WindowMode` 包含 `Normal`、`Minimized`、`Maximized`、`Fullscreen`。当前 Windows 实现里，`Fullscreen` 暂时按最大化处理。
+
+### 位置与尺寸
+
+| API | 作用 |
+| --- | --- |
+| `get_left()` / `get_top()` | 读取窗口左上角屏幕坐标。 |
+| `set_left(left)` / `set_top(top)` | 单独设置窗口横向或纵向位置。 |
+| `set_position((x, y))` | 同时设置窗口位置。 |
+| `get_width()` / `get_height()` | 读取整个窗口宽高。 |
+| `set_width(width)` / `set_height(height)` | 单独设置窗口宽度或高度。 |
+| `set_size((width, height))` | 同时设置窗口大小。 |
+| `get_client_size()` | 读取客户区大小。 |
+| `get_client_rect()` | 读取客户区在屏幕上的矩形。 |
+| `get_window_rect()` | 读取整个窗口在屏幕上的矩形。 |
+
+位置使用 `i32`，允许多显示器环境里的负坐标；尺寸使用 `u32`。
+
+### DPI、输入法与鼠标
+
+| API | 作用 |
+| --- | --- |
+| `get_scale_factor()` | 读取 DPI 缩放因子；当前 Windows 实现还是 `todo!()`，不要在应用侧调用。 |
+| `get_dpi()` | 读取窗口 DPI。 |
+| `set_ime_window_location(rect)` | 设置 IME 候选窗口位置。 |
+| `set_ime_open_state(is_open)` | 打开或关闭输入法状态。 |
+| `set_ime_allowed(allow)` | 允许或禁用 IME。 |
+| `set_cursor(cursor)` | 设置当前光标。 |
+| `drag_window()` | 触发系统窗口拖动。 |
+| `capture_mouse()` | 捕获鼠标。 |
+| `release_mouse()` | 释放鼠标捕获。 |
+
+### 重绘
+
+| API | 作用 |
+| --- | --- |
+| `request_redraw()` | 异步请求窗口重绘。 |
+
+普通控件状态变化会由 Flor 自动请求重绘。只有在你直接通过窗口或平台能力改了框架无法感知的外部状态时，才需要手动调用 `request_redraw()`。

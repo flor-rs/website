@@ -1,0 +1,47 @@
+[
+  {
+    "type": "file",
+    "name": "init",
+    "label": "Initialization and Message Loop"
+  },
+  {
+    "type": "file",
+    "name": "window",
+    "label": "Window Creation and Control"
+  },
+  {
+    "type": "file",
+    "name": "signal",
+    "label": "Cross-thread Reactive Signal"
+  },
+  {
+    "type": "file",
+    "name": "handler",
+    "label": "External Events"
+  },
+  {
+    "type": "file",
+    "name": "control-state",
+    "label": "Widget State"
+  },
+  {
+    "type": "dir",
+    "name": "builder",
+    "label": "Unified Builder Methods"
+  },
+  {
+    "type": "file",
+    "name": "resolver-layer",
+    "label": "Resolver Layer Mechanism"
+  },
+  {
+    "type": "file",
+    "name": "framework-dsl",
+    "label": "Framework DSL"
+  },
+  {
+    "type": "file",
+    "name": "focus",
+    "label": "Focus Mechanism"
+  }
+]

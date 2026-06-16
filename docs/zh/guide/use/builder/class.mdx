@@ -1,0 +1,103 @@
+# 原子类支持
+
+原子类指 `.class(...)` builder 带来的能力。它适合在创建控件时用一串类名快速配置布局和样式。
+
+```rust
+use flor::view::builder::ClassBuilder;
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let view = div(views![
+    label("标题").class("text-lg font-bold"),
+    button("保存").class("btn-filled btn-md")
+])
+.class("flex flex-col gap-3 p-4");
+```
+
+使用 `.class(...)` 需要启用 `class` feature。具体类名语法见 [class 语法解析基础](/zh/api/class-syntax)，内置 layout class 清单见 [layout class 语法](/zh/api/layout-class)。
+
+## 基本写法
+
+导入 `ClassBuilder` 后，所有控件都可以调用 `.class(...)`。
+
+```rust
+use flor::view::builder::ClassBuilder;
+use flor_lys::label::label;
+
+let title = label("Flor")
+    .class("text-xl font-bold");
+```
+
+`.class(...)` 只有一个方法入口。当前没有 `classes(...)`、`add_class(...)`、`remove_class(...)` 这几个 builder 方法；要设置多个类，直接写在同一个字符串里，用空格分隔。
+
+```rust
+let item = label("项目")
+    .class("px-3 py-2 hover:bg-slate-100");
+```
+
+## 可以传什么
+
+`.class(...)` 的参数需要能生成 `String`。常用写法有三种：
+
+| 写法 | 示例 | 适合场景 |
+| --- | --- | --- |
+| 字符串字面量 | `.class("flex gap-2")` | 固定类名。 |
+| `String` | `.class(format!("w-[{}px]", width))` | 创建控件时已经算好的类名。 |
+| 返回 `String` 的闭包 | `.class(move || if open.get() { "block".to_string() } else { "hidden".to_string() })` | 类名依赖 signal 或其他动态状态。 |
+
+闭包版本会随依赖变化重新生成类名，适合控制显示隐藏、尺寸、状态样式等。
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::view::builder::ClassBuilder;
+use flor_lys::label::label;
+
+let open = create_signal(true);
+
+let panel = label("详情")
+    .class(move || {
+        if open.get() {
+            "block p-4".to_string()
+        } else {
+            "hidden".to_string()
+        }
+    });
+```
+
+## 类名怎样生效
+
+同一串类名里可以同时写 layout class 和控件样式 class：
+
+```rust
+let title = label("欢迎")
+    .class("w-full px-4 py-2 text-center text-blue-600 font-semibold");
+```
+
+其中 layout class 由 Flor 统一解析；控件样式 class 由具体控件自己解析。不同控件支持的样式类不完全一样，不认识的类会被忽略。
+
+完整解析规则查 [class 语法解析基础](/zh/api/class-syntax)。layout class 支持列表查 [layout class 语法](/zh/api/layout-class)。
+
+## 状态写法
+
+类名可以带 `hover:`、`focus:`、`active:`、`disabled:` 这类状态前缀。
+
+```rust
+let item = label("可选项")
+    .class("px-3 py-2 hover:bg-slate-100 focus:bg-blue-50 disabled:opacity-50");
+```
+
+状态前缀的解析规则见 [class 语法解析基础](/zh/api/class-syntax#状态前缀)。
+
+## 和 layout / style 的关系
+
+Flor 的设计里，class 是面向快速开发的字符串表达层。它可以描述 layout 的值，也可以描述控件 style 的值，所以适合写简短、可读、接近 Tailwind 的配置：
+
+```rust
+.class("flex flex-col gap-2 p-4")
+```
+
+`.layout(...)` 是直接设置布局的强类型 builder。`.style(...)` 是直接设置控件样式的强类型 builder。`.class(...)` 主要是为了快速开发，所以作为可选 feature 提供。
+
+三者可以同时使用；同一项配置以后写入的值为准。

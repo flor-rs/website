@@ -1,0 +1,348 @@
+# layout class 语法
+
+本页列出 Flor 内置 layout class 的当前支持范围。使用 `.class(...)` 的教程见 [原子类支持](/zh/guide/use/builder/class)，通用 class 字符串解析规则见 [class 语法解析基础](/zh/api/class-syntax)。
+
+layout class 由 Flor 统一解析，对所有控件可用。Flex、Grid、Block 相关类受 feature 控制。
+
+## 值语法
+
+下表里的 `*` 代表一个值。通用值语法见 [class 语法解析基础](/zh/api/class-syntax#长度值)。
+
+| 写法 | 示例 | 说明 |
+| --- | --- | --- |
+| 裸数字 | `4` | 按 Tailwind 间距习惯解析，默认 `4 = 16px`。 |
+| 带单位 | `[12px]`、`[1rem]`、`[12pt]`、`[50vw]`、`[50vh]` | 支持 `px`、`rem`、`pt`、`vw`、`vh`。 |
+| 百分比 | `50%`、`[50%]` | 转为百分比。 |
+| 分数 | `1/2`、`1/3` | 转为百分比。 |
+| 关键字 | `auto`、`full`、`screen` | 按具体属性解释。 |
+
+## Display
+
+| 类名 | 效果 | feature |
+| --- | --- | --- |
+| `hidden` | `Display::None` | 无 |
+| `flex` | `Display::Flex` | `layout-flex` |
+| `grid` | `Display::Grid` | `layout-grid` |
+| `block` | `Display::Block` | `layout-block` |
+
+## Position
+
+| 类名 | 效果 |
+| --- | --- |
+| `relative` | `Position::Relative` |
+| `absolute` | `Position::Absolute` |
+
+当前不支持 `fixed`、`sticky`。
+
+## Box Sizing
+
+| 类名 | 效果 |
+| --- | --- |
+| `box-border` | `BoxSizing::BorderBox` |
+| `box-content` | `BoxSizing::ContentBox` |
+
+## Z Index
+
+`z-*` 在 `.class(...)` 入口里作为层级处理。
+
+| 类名 | 效果 |
+| --- | --- |
+| `z-auto` | z-index 设为 `0`。 |
+| `z-10` | z-index 设为 `10`。 |
+| `z--1` | z-index 设为 `-1`。 |
+
+`z-*` 当前不走状态前缀解析；例如 `hover:z-10` 不会作为 hover 层级处理。
+
+## Overflow
+
+| 类名 | 效果 |
+| --- | --- |
+| `overflow-visible` | x/y 都为 `Overflow::Visible`。 |
+| `overflow-hidden` | x/y 都为 `Overflow::Hidden`。 |
+| `overflow-clip` | x/y 都为 `Overflow::Clip`。 |
+| `overflow-scroll` | x/y 都为 `Overflow::Scroll`。 |
+| `overflow-x-visible` / `overflow-x-hidden` / `overflow-x-clip` / `overflow-x-scroll` | 只设置 x 方向。 |
+| `overflow-y-visible` / `overflow-y-hidden` / `overflow-y-clip` / `overflow-y-scroll` | 只设置 y 方向。 |
+
+## Size
+
+| 类名模式 | 效果 | 支持值 |
+| --- | --- | --- |
+| `w-*` | 宽度 | `auto`、`full`、`fit`、`min`、`max`、数字、分数、百分比、任意长度值。 |
+| `h-*` | 高度 | 同 `w-*`。 |
+| `size-*` | 同时设置宽高 | 同 `w-*`。 |
+| `w-screen` / `h-screen` / `size-screen` | 使用当前窗口客户区尺寸 | `screen`。 |
+| `min-w-*` / `min-h-*` | 最小宽度 / 最小高度 | 同 `w-*`，并支持 `screen`。 |
+| `max-w-*` / `max-h-*` | 最大宽度 / 最大高度 | 同 `w-*`，并支持 `screen`。 |
+
+示例：
+
+```text
+w-full
+h-auto
+w-1/2
+min-w-[240px]
+max-h-[80vh]
+size-10
+```
+
+## Padding
+
+| 类名模式 | 效果 |
+| --- | --- |
+| `p-*` | 四边内边距。 |
+| `px-*` | 左右内边距。 |
+| `py-*` | 上下内边距。 |
+| `pl-*` | 左内边距。 |
+| `pr-*` | 右内边距。 |
+| `pt-*` | 上内边距。 |
+| `pb-*` | 下内边距。 |
+
+支持数字、百分比、分数、`full` 和任意长度值。
+
+```text
+p-4
+px-2
+pt-[10px]
+pl-1/2
+```
+
+## Margin
+
+| 类名模式 | 效果 |
+| --- | --- |
+| `m-*` | 四边外边距。 |
+| `mx-*` | 左右外边距。 |
+| `my-*` | 上下外边距。 |
+| `ml-*` | 左外边距。 |
+| `mr-*` | 右外边距。 |
+| `mt-*` | 上外边距。 |
+| `mb-*` | 下外边距。 |
+
+支持 `auto`、数字、百分比、分数、`full` 和任意长度值。
+
+```text
+m-4
+mx-auto
+mt-2
+mb-[20px]
+```
+
+## Inset
+
+Inset 类通常和 `absolute` 或 `relative` 一起使用。
+
+| 类名模式 | 效果 |
+| --- | --- |
+| `inset-*` | 四边偏移。 |
+| `inset-x-*` | 左右偏移。 |
+| `inset-y-*` | 上下偏移。 |
+| `left-*` | 左偏移。 |
+| `right-*` | 右偏移。 |
+| `top-*` | 上偏移。 |
+| `bottom-*` | 下偏移。 |
+
+支持 `auto`、数字、百分比、分数、`full` 和任意长度值。
+
+```text
+inset-0
+top-4
+left-1/2
+right-[10px]
+```
+
+## Border Width
+
+这里的 border class 只设置布局层面的边框厚度，不设置边框颜色或圆角。
+
+| 类名模式 | 效果 |
+| --- | --- |
+| `border` | 四边厚度为 1px。 |
+| `border-*` | 四边厚度。 |
+| `border-x-*` / `border-y-*` | 左右 / 上下厚度。 |
+| `border-l-*` / `border-r-*` / `border-t-*` / `border-b-*` | 单边厚度。 |
+
+```text
+border
+border-2
+border-b-[1px]
+```
+
+## Gap
+
+需要 `layout-flex` 或 `layout-grid` feature。
+
+| 类名模式 | 效果 |
+| --- | --- |
+| `gap-*` | 两个方向的间距。 |
+| `gap-x-*` | x 方向间距。 |
+| `gap-y-*` | y 方向间距。 |
+
+```text
+gap-4
+gap-x-2
+gap-y-[10px]
+```
+
+## Flex
+
+需要 `layout-flex` feature。
+
+| 类名 | 效果 |
+| --- | --- |
+| `flex-row` | `FlexDirection::Row` |
+| `flex-row-reverse` | `FlexDirection::RowReverse` |
+| `flex-col` | `FlexDirection::Column` |
+| `flex-col-reverse` | `FlexDirection::ColumnReverse` |
+| `flex-wrap` | `FlexWrap::Wrap` |
+| `flex-wrap-reverse` | `FlexWrap::WrapReverse` |
+| `flex-nowrap` | `FlexWrap::NoWrap` |
+| `flex-1` | `grow: 1`、`shrink: 1`、`basis: 0%` |
+| `flex-auto` | `grow: 1`、`shrink: 1`、`basis: auto` |
+| `flex-initial` | `grow: 0`、`shrink: 1`、`basis: auto` |
+| `flex-none` | `grow: 0`、`shrink: 0`、`basis: auto` |
+| `grow` | `FlexGrow(1.0)` |
+| `grow-*` / `grow-[1.5]` | 自定义 grow 值。 |
+| `shrink` | `FlexShrink(1.0)` |
+| `shrink-*` / `shrink-[0.5]` | 自定义 shrink 值。 |
+| `basis-*` | `FlexBasis`，值按尺寸值解析。 |
+
+## Flex / Grid 共享对齐
+
+需要 `layout-flex` 或 `layout-grid` feature。
+
+| 类名 | 效果 |
+| --- | --- |
+| `items-start` | `AlignItems::Start` |
+| `items-end` | `AlignItems::End` |
+| `items-center` | `AlignItems::Center` |
+| `items-baseline` | `AlignItems::Baseline` |
+| `items-stretch` | `AlignItems::Stretch` |
+| `self-start` | `AlignSelf::Start` |
+| `self-end` | `AlignSelf::End` |
+| `self-center` | `AlignSelf::Center` |
+| `self-baseline` | `AlignSelf::Baseline` |
+| `self-stretch` | `AlignSelf::Stretch` |
+| `justify-start` | `JustifyContent::Start` |
+| `justify-end` | `JustifyContent::End` |
+| `justify-center` | `JustifyContent::Center` |
+| `justify-between` | `JustifyContent::SpaceBetween` |
+| `justify-around` | `JustifyContent::SpaceAround` |
+| `justify-evenly` | `JustifyContent::SpaceEvenly` |
+| `justify-stretch` | `JustifyContent::Stretch` |
+| `content-start` | `AlignContent::Start` |
+| `content-end` | `AlignContent::End` |
+| `content-center` | `AlignContent::Center` |
+| `content-between` | `AlignContent::SpaceBetween` |
+| `content-around` | `AlignContent::SpaceAround` |
+| `content-evenly` | `AlignContent::SpaceEvenly` |
+| `content-stretch` | `AlignContent::Stretch` |
+
+## Grid
+
+需要 `layout-grid` feature。
+
+| 类名 | 效果 |
+| --- | --- |
+| `grid-flow-row` | `GridAutoFlow::Row` |
+| `grid-flow-col` | `GridAutoFlow::Column` |
+| `grid-flow-row-dense` | `GridAutoFlow::RowDense` |
+| `grid-flow-col-dense` | `GridAutoFlow::ColumnDense` |
+| `row-start-*` / `row-end-*` | 设置 grid 行起止线，值为整数。 |
+| `col-start-*` / `col-end-*` | 设置 grid 列起止线，值为整数。 |
+| `row-span-*` | 设置行 span，值为正整数。 |
+| `col-span-*` | 设置列 span，值为正整数。 |
+| `justify-items-start` | `JustifyItems::Start` |
+| `justify-items-end` | `JustifyItems::End` |
+| `justify-items-center` | `JustifyItems::Center` |
+| `justify-items-stretch` | `JustifyItems::Stretch` |
+| `justify-self-start` | `JustifySelf::Start` |
+| `justify-self-end` | `JustifySelf::End` |
+| `justify-self-center` | `JustifySelf::Center` |
+| `justify-self-stretch` | `JustifySelf::Stretch` |
+
+当前不支持 `grid-cols-*`、`grid-rows-*`、`auto-cols-*`、`auto-rows-*`。
+
+## Block Text Align
+
+需要 `layout-block` feature。
+
+| 类名 | 效果 |
+| --- | --- |
+| `text-left` | `TextAlign::LegacyLeft` |
+| `text-center` | `TextAlign::LegacyCenter` |
+| `text-right` | `TextAlign::LegacyRight` |
+
+注意：这些是 block layout 的文本/行内对齐类。具体控件也可能把 `text-*` 解析为控件样式，例如文本颜色或字号。
+
+## Aspect Ratio
+
+| 类名 | 效果 |
+| --- | --- |
+| `aspect-square` | 1:1。 |
+| `aspect-video` | 16:9。 |
+| `aspect-[N]` | 自定义比例。 |
+| `aspect-[N/M]` | 分数比例。 |
+
+```text
+aspect-square
+aspect-video
+aspect-[4/3]
+```
+
+## Scrollbar Width
+
+| 类名模式 | 效果 |
+| --- | --- |
+| `scrollbar-*` | 设置 `ScrollbarWidth`，值使用 px。 |
+
+```text
+scrollbar-0
+scrollbar-4
+scrollbar-[10px]
+```
+
+## 状态前缀
+
+layout class 支持通用状态前缀：
+
+```text
+p-4 hover:p-6 focus:p-8
+```
+
+状态前缀规则见 [class 语法解析基础](/zh/api/class-syntax#状态前缀)。
+
+`z-*` 是例外：它在进入状态前缀解析前被作为层级处理，因此当前不支持 `hover:z-10` 这类写法。
+
+## 合并行为
+
+同一批 class 会按声明顺序解析：
+
+```text
+p-4 pl-2 pt-1
+```
+
+结果是 left 被 `pl-2` 覆盖，top 被 `pt-1` 覆盖，其他边保留 `p-4`。
+
+```text
+p-4 p-8
+```
+
+结果是 `p-8` 覆盖 `p-4`。
+
+多次调用 `.class(...)` 会创建多层配置；后创建的层在同一布局属性上覆盖前面的层。
+
+## 当前不支持
+
+以下是常见但当前 layout class 没有实现的语法：
+
+| 语法 | 状态 |
+| --- | --- |
+| `fixed`、`sticky` | 不支持。 |
+| `grid-cols-*`、`grid-rows-*` | 不支持。 |
+| `auto-cols-*`、`auto-rows-*` | 不支持。 |
+| `order-*` | 不支持。 |
+| `place-content-*`、`place-items-*`、`place-self-*` | 不支持。 |
+| `space-x-*`、`space-y-*` | 不支持。 |
+| 响应式前缀 `sm:`、`md:`、`lg:` | 不支持。 |
+| 负值前缀 `-m-4`、`-top-2` | 不支持；需要负值时优先使用 builder 或补充实现。 |

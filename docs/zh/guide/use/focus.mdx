@@ -1,0 +1,160 @@
+# 焦点机制
+
+Flor 的焦点是显式机制。控件不会因为能点击、能显示文字、绑定了键盘事件，就自动进入焦点系统。一个控件只有进入焦点表，才会被 Tab 访问，才会成为控件级 [`on_key_*`](/zh/api/handler#键盘事件) 的派发目标，也才会由焦点管理器触发 `on_focus` 和 `on_blur`。
+
+先看一个最小例子：
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let name = label("名称")
+    // 加入焦点表。0 是排序值，表示这是当前范围内最先访问的焦点项。
+    .focus_index(0)
+    .on_focus(|view_id, virtual_index| {
+        println!("focus {view_id}, virtual index: {virtual_index}");
+    });
+```
+
+没有 `focus_index` 的控件不会进入焦点表。它不会被 Tab 选中；点击它时，框架无法把焦点设置到这个控件；它的控件级 `on_focus` / `on_blur` 不会由焦点管理器触发；它的控件级 [`on_key_*`](/zh/api/handler#键盘事件) 也不会因为“这个控件获得焦点”而触发。
+
+具体的 builder 写法见 [焦点 Builder](/zh/guide/use/builder/focus)。运行时通过 `ViewId` 操控焦点的 API 见 [ViewId](/zh/guide/control/view-id)。
+
+## 键盘事件依赖焦点
+
+键盘事件会派发给当前焦点控件。想让一个控件处理控件级键盘事件，需要让它进入焦点表，并让它成为当前焦点。
+
+```rust
+use flor::base::platform::{HandleResult, KeyCode};
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let editor = label("按 Ctrl+S 保存")
+    .focus_index(0)
+    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+        if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
+            println!("save");
+            HandleResult::Handled
+        } else {
+            HandleResult::Default
+        }
+    });
+```
+
+当前没有焦点控件时，`key_down` / `key_up` 会走窗口级处理；某个没有获得焦点的普通控件不会收到自己的控件级 [`on_key_*`](/zh/api/handler#键盘事件)。文本输入和 IME 输入同样依赖当前焦点控件。
+
+## 点击与焦点
+
+鼠标事件走命中测试，和焦点表不是同一条派发路径。所以没有 `focus_index` 的控件仍然可以收到 `on_click`、`on_button_down`、`on_mouse_move` 这类鼠标事件。
+
+点击结束时，框架会尝试把焦点设置到被点击的控件上。这个动作仍然受焦点表限制：目标控件没有 `focus_index`，焦点管理器找不到对应条目，控件不会成为当前焦点。
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let item = label("点击后获得焦点")
+    .focus_index(0)
+    .on_click(|_, _, _| {
+        println!("clicked");
+    });
+```
+
+## 虚拟焦点
+
+焦点表里的条目不是单纯的 `ViewId`，而是：
+
+```text
+(focus_index, ViewId, virtual_index)
+```
+
+大多数控件只有一个虚拟焦点点位，序号是 `0`。所以 `on_focus` 和 `on_blur` 的第二个参数常见值就是 `0`。
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let view = label("单焦点控件")
+    .focus_index(0)
+    .on_focus(|_, virtual_index| {
+        assert_eq!(virtual_index, 0);
+    });
+```
+
+复合控件可以暴露多个虚拟焦点点位。比如一个编辑器控件可以把文本区、补全面板、行号区设计成同一个控件内的不同焦点位置。终端用户只需要读取 `virtual_index`，不需要自己申请虚拟焦点数量；申请数量属于控件开发者的 `View::on_focus_count` 能力。
+
+## 排序分段
+
+复杂页面经常需要把焦点顺序拆成几个区域。Flor 提供 `focus_scope(u32)` 作为排序偏移：它会影响当前控件子树里的 `focus_index` 最终排序值。
+
+```rust
+use flor::view::builder::FocusIndexBuilder;
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let toolbar = div(views![
+    label("工具 1").focus_index(0),
+    label("工具 2").focus_index(1),
+])
+.focus_scope(100);
+
+let content = div(views![
+    label("内容 1").focus_index(0),
+    label("内容 2").focus_index(1),
+])
+.focus_scope(200);
+```
+
+这组焦点的最终排序值是：
+
+| 控件 | 局部写法 | 最终排序值 |
+| --- | --- | --- |
+| 工具 1 | `100 + 0` | `100` |
+| 工具 2 | `100 + 1` | `101` |
+| 内容 1 | `200 + 0` | `200` |
+| 内容 2 | `200 + 1` | `201` |
+
+`focus_scope(u32)` 是排序分段，不是弹窗里的焦点隔离。它不会让 Tab 只能停留在这个区域内。
+
+## 运行时作用域
+
+Modal、Popup、侧边栏这类界面需要另一种能力：打开时让 Tab 只在弹出层内部循环，关闭后恢复之前的焦点位置。
+
+Flor 用运行时焦点作用域处理这个场景。弹出层打开时，把弹出层根控件压入焦点作用域；关闭时，把这个作用域弹出。
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let dialog = div(views![
+    label("名称").focus_index(0),
+    label("确认").focus_index(1),
+])
+.on_create(|dialog_root_id| {
+    dialog_root_id.push_focus_scope();
+});
+```
+
+关闭弹出层时调用 `pop_focus_scope`。完整的 `ViewId` 方法说明见 [ViewId](/zh/guide/control/view-id)。
+
+运行时作用域只筛选已经在焦点表里的控件。如果弹出层内部没有控件设置 `focus_index`，Tab 在这个作用域里没有目标。
+
+## 机制说明
+
+窗口创建时，Flor 会初始化焦点表：
+
+1. 从窗口根节点开始遍历控件树。
+2. 遇到 `focus_scope(u32)` 时，把它加到当前累计偏移上。
+3. 遇到 `focus_index(u32)` 时，用“累计偏移 + 局部 index”生成排序值。
+4. 查询该控件的虚拟焦点数量，默认是 `1`。
+5. 为每个虚拟焦点生成一条 `(focus_index, ViewId, virtual_index)`。
+6. 把所有条目排序后交给 `FocusManager`。
+
+Tab 键进入事件总线后，`FocusManager::next()` 会在当前焦点表里向后移动；Shift+Tab 会调用 `prev()` 向前移动。每次焦点切换时，旧条目触发 `blur`，新条目触发 `focus`。
+
+如果存在运行时焦点作用域，`FocusManager` 会先把焦点表过滤到栈顶作用域根控件的子树内，再执行 next/prev。
+
+键盘事件查当前焦点所在的 `ViewId`，然后派发给这个控件。没有当前焦点时，控件级键盘 handler 不会被调用。

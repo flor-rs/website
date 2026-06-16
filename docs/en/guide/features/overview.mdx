@@ -1,0 +1,24 @@
+# Framework Capabilities
+
+Framework capabilities section专门介绍 `flor`'s可选 capabilities. They大多 through Cargo feature开启,启用后会暴露对应 API, event builder or platform behavior.
+
+If只是想查所有 feature names, first see [Quick Overview](/en/guide/startup#框架-feature). This section会把 platform capabilities拆开讲清楚:启用后能做什么,入口在哪里,和哪些 tutorials/API有关.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "clipboard", "drag-drop"] }
+```
+
+## Platform Capabilities
+
+| Feature | Capability | Entry |
+| --- | --- | --- |
+| `clipboard` | Read/write system clipboard. | [Clipboard](/en/guide/features/clipboard) |
+| `drag-drop` | Receive system drag-drop enter, hover, leave, release events. | [Drag-Drop](/en/guide/features/drag-drop) |
+| `tray` | Add, update, delete system tray icon, and receive tray mouse events. | [System Tray](/en/guide/features/tray) |
+| `theme-change` | Expose system theme change related event entry. | [Theme Change](/en/guide/features/theme-change) |
+| `monitor` | Query monitor list, work area, DPI, scaling etc. info. | [Monitor Information](/en/guide/features/monitor) |
+| `hi-dpi` | Enable process-level DPI awareness,配合 DPI change event update layout units. | [High DPI](/en/guide/features/hi-dpi) |
+| `cross-thread-window-creation` | Allow requesting window creation outside event loop thread. | [Cross-thread Window Creation](/en/guide/features/cross-thread-window-creation) |
+
+Event类 capabilities通常还需要配合 [Event Builder](/en/guide/use/builder/event) use; complete handler signature and current dispatch status see [Handler API](/en/api/handler).

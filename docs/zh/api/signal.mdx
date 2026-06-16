@@ -1,0 +1,182 @@
+# Signal API
+
+本页用于查询 `flor::signal` 的主要公开 API。使用教程见 [Signal 响应式系统](/zh/guide/use/signal)。
+
+## `Signal`
+
+```rust
+trait Signal {
+    fn id(&self) -> Id;
+    fn exists(&self) -> bool;
+    fn destroy(&self);
+}
+```
+
+## `Read<T>`
+
+```rust
+trait Read<T>: Signal {
+    fn track(&self);
+    fn try_get(&self) -> Option<T>
+    where
+        T: Clone + 'static;
+    fn get(&self) -> T
+    where
+        T: Clone + 'static;
+    fn get_ref(&self) -> SignalRef<'_, T>;
+    fn try_get_ref(&self) -> Option<SignalRef<'_, T>>;
+}
+```
+
+## `Write<T>`
+
+```rust
+trait Write<T>: Signal {
+    fn set(&self, new_value: T)
+    where
+        T: 'static;
+    fn try_set(&self, new_value: T) -> bool
+    where
+        T: 'static;
+    fn update(&self, f: impl FnOnce(&mut T))
+    where
+        T: 'static;
+    fn try_update(&self, f: impl FnOnce(&mut T)) -> bool
+    where
+        T: 'static;
+}
+```
+
+## `RwSignal<T>`
+
+`RwSignal<T>` 通常由 `create_signal` 或 `create_signal_with_label` 返回。业务代码一般不需要根据 `Id` 手动构造信号句柄。
+
+```rust
+impl<T> RwSignal<T> {
+    fn split(self) -> (ReadSignal<T>, WriteSignal<T>);
+    fn as_read(&self) -> ReadSignal<T>;
+    fn as_write(&self) -> WriteSignal<T>;
+    fn set_label(&self, label: &str);
+}
+```
+
+## `ListRead<T>`
+
+```rust
+trait ListRead<T>: Signal {
+    fn track(&self);
+    fn len(&self) -> Option<usize>;
+    fn len_or_zero(&self) -> usize;
+    fn is_empty(&self) -> bool;
+    fn contains(&self, value: &T) -> bool
+    where
+        T: PartialEq + 'static;
+    fn try_contains(&self, value: &T) -> Option<bool>
+    where
+        T: PartialEq + 'static;
+    fn try_get(&self, index: usize) -> Option<T>
+    where
+        T: Clone + 'static;
+    fn get(&self, index: usize) -> T
+    where
+        T: Clone + 'static;
+    fn to_vec(&self) -> Vec<T>
+    where
+        T: Clone + 'static;
+    fn try_to_vec(&self) -> Option<Vec<T>>
+    where
+        T: Clone + 'static;
+    fn for_each_ref<F>(&self, f: F) -> Option<()>
+    where
+        F: FnMut(&T),
+        T: 'static;
+    fn try_borrow(&self) -> Option<ListRef<'_, T>>
+    where
+        T: 'static;
+}
+```
+
+## `ListWrite<T>`
+
+```rust
+trait ListWrite<T>: Signal {
+    fn track(&self);
+    fn push(&self, value: T)
+    where
+        T: 'static;
+    fn try_push(&self, value: T) -> bool
+    where
+        T: 'static;
+    fn set(&self, index: usize, value: T)
+    where
+        T: 'static;
+    fn try_set(&self, index: usize, value: T) -> bool
+    where
+        T: 'static;
+    fn insert(&self, index: usize, value: T)
+    where
+        T: 'static;
+    fn try_insert(&self, index: usize, value: T) -> bool
+    where
+        T: 'static;
+    fn remove(&self, index: usize) -> T
+    where
+        T: 'static;
+    fn try_remove(&self, index: usize) -> Option<T>
+    where
+        T: 'static;
+    fn clear(&self);
+    fn try_clear(&self) -> bool;
+    fn update(&self, index: usize, f: impl FnOnce(&mut T))
+    where
+        T: 'static;
+    fn try_update(&self, index: usize, f: impl FnOnce(&mut T)) -> bool
+    where
+        T: 'static;
+}
+```
+
+## 创建函数
+
+```rust
+fn create_signal<T: 'static>(value: T) -> RwSignal<T>;
+fn create_rw_signal<T: 'static>(value: T) -> (ReadSignal<T>, WriteSignal<T>);
+fn create_signal_with_label<T: 'static>(value: T, label: &str) -> RwSignal<T>;
+fn create_rw_signal_with_label<T: 'static>(
+    value: T,
+    label: &str,
+) -> (ReadSignal<T>, WriteSignal<T>);
+
+fn create_list_signal<T: 'static>(value: Vec<T>) -> RwListSignal<T>;
+fn create_rw_list_signal<T: 'static>(
+    value: Vec<T>,
+) -> (ReadListSignal<T>, WriteListSignal<T>);
+fn create_list_signal_with_label<T: 'static>(
+    value: Vec<T>,
+    label: &str,
+) -> RwListSignal<T>;
+fn create_rw_list_signal_with_label<T: 'static>(
+    value: Vec<T>,
+    label: &str,
+) -> (ReadListSignal<T>, WriteListSignal<T>);
+
+fn create_effect<T>(f: impl Fn(Option<T>) -> T + 'static)
+where
+    T: Any + 'static;
+
+fn create_updater<R>(
+    compute: impl Fn() -> R + 'static,
+    on_change: impl Fn(R) + 'static,
+) -> R
+where
+    R: 'static;
+
+fn create_updater_with_id<R>(
+    compute: impl Fn() -> R + 'static,
+    on_change: impl Fn(R) + 'static,
+) -> (Id, R)
+where
+    R: 'static;
+
+fn batch(f: impl Fn());
+```

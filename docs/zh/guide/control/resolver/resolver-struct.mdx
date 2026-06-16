@@ -1,0 +1,73 @@
+# Resolver 结构体
+
+> 这个页面不需要刻意学习，读过有个印象就够了。控件开发时直接使用 [Resolver 派生宏](/zh/guide/control/resolver/resolver-derive) 即可。
+
+`Resolver` 是 Flor 框架内部的样式/布局解析器，用于管理状态变体、单位换算和计算缓存。控件作者通常不需要直接操作 `Resolver`，而是通过 [Resolver 派生宏](/zh/guide/control/resolver/resolver-derive) 自动生成实现。
+
+```rust
+use flor::view::resolver::Resolver;
+```
+
+## 概述
+
+`Resolver` 的核心职责：
+
+- 存储不同 `ControlState` 下的样式变体
+- 通过 `UnitResolver` 进行单位换算
+- 缓存计算结果，避免重复计算
+- 支持多层级样式叠加（layer）
+
+控件作者只需要知道：`Resolver` 会根据当前控件状态（Normal、Hover、Focus、Active、Disabled）自动选择对应的样式变体，并计算出最终结果。
+
+## new_with_compute_func
+
+`new_with_compute_func` 是 `Resolver` 的构造入口，需要传入 `ViewId` 和计算函数：
+
+```rust
+pub fn new_with_compute_func(view_id: ViewId, compute_func: F) -> Self
+```
+
+计算函数签名：
+
+```rust
+F: for<'a> Fn(&UnitResolver, &ResolverComputeMap<K, V>) -> D
+```
+
+它接收单位解析器和合并后的样式变体，返回计算后的数据。
+
+### 实例：LayoutResolver
+
+`LayoutResolver` 是 `Resolver` 的一个实例，用于计算 Taffy 布局样式：
+
+```rust
+use flor::view::resolver::LayoutResolver;
+
+impl LayoutResolver {
+    pub fn new(view_id: ViewId) -> Self {
+        Self::new_with_compute_func(view_id, computed_layout)
+    }
+}
+```
+
+`computed_layout` 函数和 `LayoutResolver` 类型都由 `#[derive(Resolver)]` 派生宏自动生成。它会遍历所有布局变体，调用 `UnitResolver` 进行单位换算，最终生成 `taffy::Style`。
+
+## 缓存机制
+
+`Resolver` 内部维护缓存：
+
+- `cache_data`：按 `ControlState` 缓存计算结果
+- `dirty`：脏标记，用于判断是否需要重新计算
+
+当样式变体变化时，缓存会被清除。获取数据时会自动触发计算。
+
+控件作者不需要关心缓存细节，只需要知道：多次调用 `get_data_clone` 或 `get_data_borrow` 不会重复计算。
+
+## 使用方式
+
+控件作者不应该手动创建 `Resolver`。正确的方式是：
+
+1. 定义样式枚举，例如 `Layout` 或自定义样式类型
+2. 使用 `#[derive(Resolver)]` 派生宏自动生成 `Resolver` 实现
+3. 在控件构造函数里调用生成的 `new` 方法
+
+详见 [Resolver 派生宏](/zh/guide/control/resolver/resolver-derive)。

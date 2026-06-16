@@ -1,0 +1,368 @@
+# Handler API
+
+This page is for querying the main public APIs of `flor::view::handler` and `flor::view::builder::EventBuilder`. For usage instructions, see [External Events](/en/guide/use/handler).
+
+## Imports
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor::view::handler::*;
+
+use flor::base::platform::{
+    HandleResult, KeyCode, KeyState, MousePosition, ScrollAxis,
+};
+```
+
+After enabling drag-drop or theme features, you will also need these types:
+
+```rust
+use flor::base::platform::{DragData, DragFormat, DropEffect};
+use flor::base::platform::ThemeMode;
+```
+
+## `EventBuilder`
+
+`EventBuilder` is implemented for all `V: View`. All methods save the handler and return `Self` for chain calls.
+
+```rust
+pub trait EventBuilder {
+    fn on_mouse_move(self, handler: impl Into<OnMouseMoveHandler>) -> Self;
+    fn on_double_click(self, handler: impl Into<OnDoubleClickHandler>) -> Self;
+    fn on_click(self, handler: impl Into<OnClickHandler>) -> Self;
+    fn on_button_down(self, handler: impl Into<OnButtonDownHandler>) -> Self;
+    fn on_button_up(self, handler: impl Into<OnButtonUpHandler>) -> Self;
+
+    fn on_right_button_double_click(
+        self,
+        handler: impl Into<OnRightButtonDoubleClickHandler>,
+    ) -> Self;
+    fn on_right_button_click(self, handler: impl Into<OnRightButtonClickHandler>) -> Self;
+    fn on_right_button_down(self, handler: impl Into<OnRightButtonDownHandler>) -> Self;
+    fn on_right_button_up(self, handler: impl Into<OnRightButtonUpHandler>) -> Self;
+
+    fn on_middle_button_double_click(
+        self,
+        handler: impl Into<OnMiddleButtonDoubleClickHandler>,
+    ) -> Self;
+    fn on_middle_button_down(self, handler: impl Into<OnMiddleButtonDownHandler>) -> Self;
+    fn on_middle_button_up(self, handler: impl Into<OnMiddleButtonUpHandler>) -> Self;
+
+    fn on_context_menu(self, handler: impl Into<OnContextMenuHandler>) -> Self;
+
+    fn on_key_down(self, handler: impl Into<OnKeyDownHandler>) -> Self;
+    fn on_key_up(self, handler: impl Into<OnKeyUpHandler>) -> Self;
+
+    fn on_mouse_enter(self, handler: impl Into<OnMouseEnterHandler>) -> Self;
+    fn on_mouse_leave(self, handler: impl Into<OnMouseLeaveHandler>) -> Self;
+    fn on_focus(self, handler: impl Into<OnFocusHandler>) -> Self;
+    fn on_blur(self, handler: impl Into<OnBlurHandler>) -> Self;
+    fn on_create(self, handler: impl Into<OnCreateHandler>) -> Self;
+    fn on_destroy(self, handler: impl Into<OnDestroyHandler>) -> Self;
+
+    fn on_resize(self, handler: impl Into<OnResizeHandler>) -> Self;
+    fn on_close_requested(self, handler: impl Into<OnCloseRequestedHandler>) -> Self;
+    fn on_work_area_changed(self, handler: impl Into<OnWorkAreaChangedHandler>) -> Self;
+    fn on_wheel_settings_changed(
+        self,
+        handler: impl Into<OnWheelSettingsChangedHandler>,
+    ) -> Self;
+    fn on_dpi_change(self, handler: impl Into<OnDpiChangeHandler>) -> Self;
+
+    #[cfg(feature = "theme-change")]
+    fn on_theme_changed(self, handler: impl Into<OnThemeChangedHandler>) -> Self;
+
+    #[cfg(feature = "drag-drop")]
+    fn on_drag_enter(self, handler: impl Into<OnDragEnterHandler>) -> Self;
+    #[cfg(feature = "drag-drop")]
+    fn on_drag_over(self, handler: impl Into<OnDragOverHandler>) -> Self;
+    #[cfg(feature = "drag-drop")]
+    fn on_drag_leave(self, handler: impl Into<OnDragLeaveHandler>) -> Self;
+    #[cfg(feature = "drag-drop")]
+    fn on_drop(self, handler: impl Into<DropHandler>) -> Self;
+}
+```
+
+## Current Dispatch Status
+
+| API | Current Status |
+| --- | --- |
+| `on_mouse_move` | Dispatched. Target is the mouse-capturing widget or current hover widget |
+| `on_mouse_enter` / `on_mouse_leave` | Dispatched. Triggered when hover target changes |
+| `on_button_down` / `on_button_up` | Dispatched. Left button down/up |
+| `on_click` | Dispatched. Synthesized when left button down/up hit the same widget |
+| `on_double_click` | Dispatched. Left button double click |
+| `on_right_button_down` / `on_right_button_up` | Dispatched. Right button down/up |
+| `on_right_button_click` | Dispatched. Synthesized when right button down/up hit the same widget |
+| `on_right_button_double_click` | Dispatched. Right button double click |
+| `on_middle_button_down` / `on_middle_button_up` | Dispatched. Middle button down/up |
+| `on_middle_button_double_click` | Dispatched. Middle button double click |
+| `on_key_down` / `on_key_up` | Dispatched. Target is current focus widget |
+| `on_focus` / `on_blur` | Dispatched. Triggered by focus manager |
+| `on_create` | Dispatched. Triggered after window creates widget tree |
+| `on_wheel_settings_changed` | Dispatched. Current mouse wheel messages go through this handler |
+| `on_drag_enter` / `on_drag_over` / `on_drag_leave` / `on_drop` | Dispatched, requires `drag-drop` feature |
+| `on_context_menu` | Has binding slot, currently no external dispatch entry in source |
+| `on_destroy` | Has binding slot, currently no external dispatch entry in source |
+| `on_resize` | Has binding slot, current Resize only updates layout and render size, no external handler call |
+| `on_close_requested` | Has binding slot, current close request doesn't call external handler |
+| `on_work_area_changed` | Has binding slot, current window bus implementation is empty |
+| `on_dpi_change` | Has binding slot, current DPI message only updates renderer, units and layout, no external handler call |
+| `on_theme_changed` | Has binding slot, requires `theme-change` feature, current window bus implementation is empty |
+
+## `ViewHandler`
+
+`ViewHandler` is a set of handler slots for each `ViewId`. Application code usually writes to these slots through `EventBuilder`, without directly manipulating `ViewHandler`.
+
+```rust
+#[derive(Default)]
+pub struct ViewHandler {
+    pub on_mouse_move_handler: Option<OnMouseMoveHandler>,
+    pub on_double_click_handler: Option<OnDoubleClickHandler>,
+    pub on_click_handler: Option<OnClickHandler>,
+    pub on_button_down_handler: Option<OnButtonDownHandler>,
+    pub on_button_up_handler: Option<OnButtonUpHandler>,
+
+    pub on_right_button_double_click_handler: Option<OnRightButtonDoubleClickHandler>,
+    pub on_right_button_click_handler: Option<OnRightButtonClickHandler>,
+    pub on_right_button_down_handler: Option<OnRightButtonDownHandler>,
+    pub on_right_button_up_handler: Option<OnRightButtonUpHandler>,
+
+    pub on_middle_button_double_click_handler: Option<OnMiddleButtonDoubleClickHandler>,
+    pub on_middle_button_down_handler: Option<OnMiddleButtonDownHandler>,
+    pub on_middle_button_up_handler: Option<OnMiddleButtonUpHandler>,
+
+    pub on_context_menu_handler: Option<OnContextMenuHandler>,
+
+    pub on_key_down_handler: Option<OnKeyDownHandler>,
+    pub on_key_up_handler: Option<OnKeyUpHandler>,
+
+    pub on_mouse_enter_handler: Option<OnMouseEnterHandler>,
+    pub on_mouse_leave_handler: Option<OnMouseLeaveHandler>,
+    pub on_focus_handler: Option<OnFocusHandler>,
+    pub on_blur_handler: Option<OnBlurHandler>,
+    pub on_create_handler: Option<OnCreateHandler>,
+    pub on_destroy_handler: Option<OnDestroyHandler>,
+
+    pub on_tooltip_show_handler: Option<OnTooltipShowHandler>,
+    pub on_tooltip_hide_handler: Option<OnTooltipHideHandler>,
+
+    pub on_resize_handler: Option<OnResizeHandler>,
+    pub on_close_requested_handler: Option<OnCloseRequestedHandler>,
+    pub on_work_area_changed_handler: Option<OnWorkAreaChangedHandler>,
+    pub on_wheel_settings_changed_handler: Option<OnWheelSettingsChangedHandler>,
+    pub on_dpi_change_handler: Option<OnDpiChangeHandler>,
+
+    #[cfg(feature = "theme-change")]
+    pub on_theme_changed_handler: Option<OnThemeChangedHandler>,
+
+    #[cfg(feature = "drag-drop")]
+    pub on_drag_enter_handler: Option<OnDragEnterHandler>,
+    #[cfg(feature = "drag-drop")]
+    pub on_drag_over_handler: Option<OnDragOverHandler>,
+    #[cfg(feature = "drag-drop")]
+    pub on_drag_leave_handler: Option<OnDragLeaveHandler>,
+    #[cfg(feature = "drag-drop")]
+    pub on_drop_handler: Option<DropHandler>,
+}
+```
+
+## Handler Wrapper Types
+
+All handler wrapper types implement `From<F>`, where `F` is a closure or function with the corresponding signature and satisfies `Send + Sync + 'static`. Therefore, user code usually passes closures directly without manually constructing wrapper types.
+
+### `Handler`
+
+```rust
+pub struct Handler(pub Arc<dyn Fn(ViewId) + Send + Sync + 'static>);
+```
+
+Used for events that only need `ViewId`.
+
+### `MouseHandler`
+
+```rust
+pub struct MouseHandler(
+    pub Arc<dyn Fn(ViewId, KeyState, MousePosition) + Send + Sync + 'static>,
+);
+```
+
+Used for mouse move, click, button down, button up, double click and similar events.
+
+### `KeyHandler`
+
+```rust
+pub struct KeyHandler(
+    pub Arc<
+        dyn Fn(ViewId, KeyCode, bool, bool, bool) -> HandleResult
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+Parameters are `ViewId`, `KeyCode`, `is_alt`, `is_ctrl`, `is_shift` in order.
+
+### `FocusHandler`
+
+```rust
+pub struct FocusHandler(
+    pub Arc<dyn Fn(ViewId, u16) + Send + Sync + 'static>,
+);
+```
+
+The second parameter is the virtual focus index.
+
+### `OnWheelSettingsChangedHandler`
+
+```rust
+pub struct OnWheelSettingsChangedHandler(
+    pub Arc<
+        dyn Fn(ViewId, ScrollAxis, f32, KeyState, MousePosition)
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+Parameters are `ViewId`, scroll direction, scroll amount, key state, mouse position in order.
+
+### `OnDpiChangeHandler`
+
+```rust
+pub struct OnDpiChangeHandler(
+    pub Arc<dyn Fn(ViewId, f32, f32) + Send + Sync + 'static>,
+);
+```
+
+The second and third parameters are `dpi_x` and `dpi_y`.
+
+### `OnThemeChangedHandler`
+
+Requires `theme-change` feature.
+
+```rust
+pub struct OnThemeChangedHandler(
+    pub Arc<dyn Fn(ViewId, ThemeMode) + Send + Sync + 'static>,
+);
+```
+
+### `DragEnterOverHandler`
+
+Requires `drag-drop` feature.
+
+```rust
+pub struct DragEnterOverHandler(
+    pub Arc<
+        dyn Fn(ViewId, KeyState, MousePosition, &[DragFormat], &mut DropEffect)
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+Used for `on_drag_enter` and `on_drag_over`.
+
+### `DropHandler`
+
+Requires `drag-drop` feature.
+
+```rust
+pub struct DropHandler(
+    pub Arc<
+        dyn Fn(ViewId, KeyState, MousePosition, &DragData, &mut DropEffect)
+            + Send
+            + Sync
+            + 'static,
+    >,
+);
+```
+
+Used for `on_drop`.
+
+## Type Aliases
+
+### Mouse Events
+
+| Alias | Underlying Type |
+| --- | --- |
+| `OnMouseMoveHandler` | `MouseHandler` |
+| `OnDoubleClickHandler` | `MouseHandler` |
+| `OnClickHandler` | `MouseHandler` |
+| `OnButtonDownHandler` | `MouseHandler` |
+| `OnButtonUpHandler` | `MouseHandler` |
+| `OnRightButtonDoubleClickHandler` | `MouseHandler` |
+| `OnRightButtonClickHandler` | `MouseHandler` |
+| `OnRightButtonDownHandler` | `MouseHandler` |
+| `OnRightButtonUpHandler` | `MouseHandler` |
+| `OnMiddleButtonDoubleClickHandler` | `MouseHandler` |
+| `OnMiddleButtonDownHandler` | `MouseHandler` |
+| `OnMiddleButtonUpHandler` | `MouseHandler` |
+| `OnContextMenuHandler` | `MouseHandler` |
+
+Currently there is no `OnMiddleButtonClickHandler`.
+
+### Keyboard Events
+
+| Alias | Underlying Type |
+| --- | --- |
+| `OnKeyDownHandler` | `KeyHandler` |
+| `OnKeyUpHandler` | `KeyHandler` |
+
+### View and Lifecycle Events
+
+| Alias | Underlying Type |
+| --- | --- |
+| `OnMouseEnterHandler` | `Handler` |
+| `OnMouseLeaveHandler` | `Handler` |
+| `OnFocusHandler` | `FocusHandler` |
+| `OnBlurHandler` | `FocusHandler` |
+| `OnCreateHandler` | `Handler` |
+| `OnDestroyHandler` | `Handler` |
+
+### Tooltip Events
+
+| Alias | Underlying Type |
+| --- | --- |
+| `OnTooltipShowHandler` | `MouseHandler` |
+| `OnTooltipHideHandler` | `Handler` |
+
+Currently `EventBuilder` does not expose chain binding methods for tooltip.
+
+### Window Events
+
+| Alias | Underlying Type |
+| --- | --- |
+| `OnResizeHandler` | `Handler` |
+| `OnCloseRequestedHandler` | `Handler` |
+| `OnWorkAreaChangedHandler` | `Handler` |
+| `OnWheelSettingsChangedHandler` | Independent wrapper type |
+| `OnDpiChangeHandler` | Independent wrapper type |
+| `OnThemeChangedHandler` | Independent wrapper type, requires `theme-change` feature |
+
+### Drag-Drop Events
+
+Requires `drag-drop` feature.
+
+| Alias | Underlying Type |
+| --- | --- |
+| `OnDragEnterHandler` | `DragEnterOverHandler` |
+| `OnDragOverHandler` | `DragEnterOverHandler` |
+| `OnDragLeaveHandler` | `Handler` |
+| `DropHandler` | Independent wrapper type |
+
+## Parameter Descriptions
+
+| Type | Description |
+| --- | --- |
+| `ViewId` | ID of the target widget that triggered the event |
+| `KeyState` | Mouse button and modifier key state |
+| `MousePosition` | Mouse coordinates. Regular mouse hit events use target widget local coordinates; wheel and drag-drop currently use window client area coordinates |
+| `KeyCode` | Key enumeration. Common keys include letters, numbers, arrow keys, function keys, `Enter`, `Escape`, `Tab`, `Backspace`, `Space`, `Delete` |
+| `HandleResult` | Keyboard event handling result, `Handled` means processed, `Default` means default processing |
+| `ScrollAxis` | `Vertical` or `Horizontal` |
+| `DropEffect` | Drag-drop feedback effect, commonly `None`, `Copy`, `Move`, `Link` |
+| `DragFormat` | Data formats available during drag enter/over phase |
+| `DragData` | Actual data passed during drop phase |

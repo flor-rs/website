@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "style-unit",
+    "label": "Style Unit"
+  },
+  {
+    "type": "file",
+    "name": "resolver-struct",
+    "label": "Resolver Struct"
+  },
+  {
+    "type": "file",
+    "name": "resolver-derive",
+    "label": "Resolver Derive"
+  },
+  {
+    "type": "file",
+    "name": "class-resolve",
+    "label": "Class Resolution"
+  }
+]

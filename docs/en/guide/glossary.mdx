@@ -1,0 +1,71 @@
+# Glossary
+
+This page unifies terminology in Flor documentation. When Chinese/English or API naming is inconsistent, refer to this page.
+
+## Flor
+
+Flor is a widget-based GUI framework.
+
+In Chinese documentation, you can directly use the name `Flor`. Its Chinese translation is "花" (flower).
+
+When describing Flor's type, it's called "框架" (framework). It's not just a library providing scattered utility functions, but a complete GUI framework including widget system, signal system, event loop, window management, rendering entry etc.
+
+## Widget / View
+
+In Chinese documentation, uniformly called "控件" (widget).
+
+In English context and Rust API, uniformly written as `View`. The `View` naming here references Floem's naming convention; the name stayed in the API. Therefore:
+
+- In Chinese explanations write "控件"
+- In types, traits, method names keep `View`
+- Don't additionally mix "组件" (component) as the main term
+
+For example:
+
+```rust
+use flor::view::View;
+
+fn mount(view: impl View) {
+    // view is usually called "控件" in Chinese documentation.
+}
+```
+
+## Signal / Signal
+
+In Chinese documentation called "信号" (signal), in English and API written as `Signal`.
+
+Signal is Flor's reactive state container. After value changes, effects, updaters or widget bindings depending on it are rescheduled.
+
+## Reader / Writer / Reader-Writer
+
+These three terms are unified names for a class of signal structs, based on which read/write traits they implement. The semantic core is in traits, not struct names themselves.
+
+- Signal struct implementing `Read<T>` can be called reader
+- Signal struct implementing `Write<T>` can be called writer
+- Signal struct implementing both `Read<T>` and `Write<T>` can be called reader-writer or read-write signal
+
+Common types include:
+
+- `ReadSignal<T>`: Reader
+- `WriteSignal<T>`: Writer
+- `RwSignal<T>`: Reader-writer or read-write signal
+
+Read-write split is mainly used to express business access boundaries: pass reader for read-only places, pass writer for write-only places, pass reader-writer when both are needed.
+
+## Builder
+
+`Builder` is kept in API, in Chinese documentation usually called "链式构建 API" (chain build API) or "构建器" (builder).
+
+For example `ClassBuilder`, `StyleBuilder`, `LayoutBuilder` are all chain APIs for appending style, layout or behavior to widgets.
+
+## Atomic Class
+
+"Atomic class" in Flor documentation specifically refers to the capability brought by `.class(...)` builder, i.e., quickly configuring widgets through space-separated class strings.
+
+Atomic class is not an independent widget type, nor does it refer to all style systems. It's an optional feature provided by `ClassBuilder`: after enabling `class` feature, widgets can use `.class("...")` to write layout class and widget style class.
+
+## Resolver
+
+`Resolver` is kept in API, in Chinese documentation usually called "解析器" (resolver).
+
+Resolver is responsible for converting class, style, state etc. descriptions into actual style or layout data used by widgets.

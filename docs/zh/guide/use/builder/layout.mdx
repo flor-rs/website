@@ -1,0 +1,268 @@
+# 布局 Builder
+
+布局 Builder 用来在创建控件时配置显示方式、尺寸、间距、定位、Flex/Grid 等布局属性。基本写法是在控件后调用 `.layout(|layout| { ... })`，在闭包里连续调用布局方法，最后返回修改后的 `layout`。
+
+## 基本写法
+
+导入 `LayoutBuilder` 后，所有控件都可以调用 `.layout(...)`。还要导入 `LayoutResolverExt`，这样闭包里的 `layout` 才能使用 `display`、`size`、`flex_grow` 等布局方法。
+
+下面的示例使用了 flex 相关类型，默认你已经启用 `layout-flex` feature。
+
+```rust
+use flor::taffy::{Dimension, Display, FlexDirection, LengthPercentage, Size};
+use flor::view::builder::LayoutBuilder;
+use flor::view::resolver::{LayoutResolverExt, Unit};
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let panel = div(views![label("内容")])
+    .layout(|layout| {
+        layout
+            .display(Display::Flex)
+            .flex_direction(FlexDirection::Column)
+            .size(
+                Size {
+                    width: Dimension::Percent(1.0),
+                    height: Dimension::Auto,
+                },
+                Size {
+                    width: Unit::Px,
+                    height: Unit::Px,
+                },
+            )
+            .gap(
+                Size {
+                    width: LengthPercentage::Length(8.0),
+                    height: LengthPercentage::Length(8.0),
+                },
+                Size {
+                    width: Unit::Px,
+                    height: Unit::Px,
+                },
+            )
+    });
+```
+
+闭包必须返回修改后的 `layout`。如果闭包捕获外部 signal 或变量，通常需要写成 `move |layout| { ... }`。
+
+Flor 当前没有直接的 `.width(100)`、`.height(40)`、`.x(10)`、`.y(20)` 这类布局 builder 方法。尺寸、位置、边距都通过 `size`、`inset`、`margin` 等布局参数表达。
+
+## 链式写法和 set 写法
+
+大多数时候直接链式调用即可：
+
+```rust
+layout
+    .display(Display::Flex)
+    .flex_grow(1.0)
+```
+
+每个布局方法还有一个同名的 `set_` 版本，例如 `display(...)` 对应 `set_display(...)`，`flex_grow(...)` 对应 `set_flex_grow(...)`。这组 `set_` 方法适合在 `if`、`match` 里分支修改同一个 `layout`。
+
+这些方法由 Flor 自动生成，所以命名保持统一：布局项名用 snake_case 写成方法名，`set_` 版本在前面加 `set_`。你按下面表格里的方法名使用即可。
+
+```rust
+use flor::taffy::Display;
+use flor::view::builder::LayoutBuilder;
+use flor::view::resolver::LayoutResolverExt;
+use flor_lys::label::label;
+
+let item = label("可切换")
+    .layout(move |mut layout| {
+        if true {
+            layout.set_display(Display::None);
+        } else {
+            layout.set_display(Display::Flex);
+        }
+        layout
+    });
+```
+
+> `set_` 方法主要用作控件开发时，解析原子类赋值时使用
+
+## 状态布局
+
+布局也可以按控件状态分别设置。调用 `hover()`、`focus()`、`active()` 等状态方法后，后续布局设置会写入对应状态；调用 `normal()` 或 `base()` 可以切回普通状态。
+
+| 方法 | 参数 | 作用 |
+| --- | --- | --- |
+| `base()` / `normal()` | 无 | 切回普通状态。 |
+| `focus()` | 无 | 后续布局项用于焦点状态。 |
+| `hover()` | 无 | 后续布局项用于悬停状态。 |
+| `active()` | 无 | 后续布局项用于激活状态。 |
+| `disabled()` | 无 | 后续布局项用于禁用状态。 |
+| `clear()` | 无 | 清空当前已有布局项。 |
+
+```rust
+use flor::taffy::{Display, FlexDirection};
+use flor::view::builder::LayoutBuilder;
+use flor::view::resolver::LayoutResolverExt;
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let view = div(views![label("内容")])
+    .layout(|layout| {
+        layout
+            .display(Display::Flex)
+            .flex_direction(FlexDirection::Column)
+            .hover()
+            .display(Display::None)
+    });
+```
+
+## 单位参数怎么读
+
+布局值主要来自 `flor::taffy`，单位类型来自 `flor::view::resolver::Unit`。
+
+`Unit` 是长度单位。它只在布局值是 length 时参与换算，最终会解析成 px 交给布局系统。
+
+| 单位 | 含义 | 换算基值 |
+| --- | --- | --- |
+| `Unit::Px` | 像素。 | 不换算，传入多少就是多少 px。 |
+| `Unit::Pt` | point，常见字体/排版单位。 | 使用当前窗口 DPI 换算，公式是 `1pt = dpi / 72 px`。普通布局长度使用窗口的垂直 DPI；窗口创建时从平台读取 DPI，DPI 变化时会更新。 |
+| `Unit::Rem` | root em。 | 使用当前窗口的 `WindowOption::rem_px`，默认是 `16.0`，所以默认 `1rem = 16px`。 |
+| `Unit::Vw` | viewport width。 | `1vw = 当前窗口客户区宽度 / 100`。窗口 resize 后会更新。 |
+| `Unit::Vh` | viewport height。 | `1vh = 当前窗口客户区高度 / 100`。窗口 resize 后会更新。 |
+
+凡是方法里同时出现布局值和 `Unit`，规则都是：布局值负责表达 length、percent 或 auto，`Unit` 只在值是 length 时决定如何解析这个数值。比如 `Dimension::Length(12.0)` 搭配 `Unit::Px` 表示 12px；`Dimension::Percent(0.5)` 和 `Dimension::Auto` 不依赖单位。
+
+## 核心布局参数
+
+这些方法不受 `layout-flex`、`layout-grid`、`layout-block` feature 影响。
+
+| 方法 | 参数 | 说明 |
+| --- | --- | --- |
+| `display(value)` | `value: Display` | 设置布局策略，例如显示、隐藏以及启用对应 feature 后的 flex/grid/block 布局模式。 |
+| `item_is_table(value)` | `value: bool` | 标记子项是否按 table item 处理。当前 table layout 没有实现，应用代码通常不需要设置它。 |
+| `box_sizing(value)` | `value: BoxSizing` | 控制 `size`、`min_size`、`max_size` 等尺寸样式作用在 content box 还是 border box。 |
+| `overflow(value)` | `value: Point<Overflow>` | 设置 x/y 两个方向的溢出行为。使用 `Point { x, y }` 分别传入横向和纵向 `Overflow`。 |
+| `scrollbar_width(width, unit)` | `width: f32`, `unit: Unit` | 为 `Overflow::Scroll` 或 `Overflow::Auto` 预留滚动条空间。`unit` 说明 `width` 的单位。 |
+| `position(value)` | `value: Position` | 设置元素定位方式，决定 `inset` 使用哪种定位基准。 |
+| `inset(value, units)` | `value: Rect<LengthPercentageAuto>`, `units: Rect<Unit>` | 设置 left/right/top/bottom 偏移。每条边的 `Length` 用对应 `Unit` 解析，`Percent` 和 `Auto` 不依赖单位。 |
+| `size(value, units)` | `value: Size<Dimension>`, `units: Size<Unit>` | 设置初始宽高。`value.width` 和 `value.height` 分别是宽高，`units.width` 和 `units.height` 是 length 单位。 |
+| `min_size(value, units)` | `value: Size<Dimension>`, `units: Size<Unit>` | 设置最小宽高，参数结构与 `size` 相同。 |
+| `max_size(value, units)` | `value: Size<Dimension>`, `units: Size<Unit>` | 设置最大宽高，参数结构与 `size` 相同。 |
+| `aspect_ratio(value)` | `value: f32` | 设置首选宽高比，计算方式是 width / height。 |
+| `margin(value, units)` | `value: Rect<LengthPercentageAuto>`, `units: Rect<Unit>` | 设置外边距。四条边都可用 length、percent 或 auto。 |
+| `padding(value, units)` | `value: Rect<LengthPercentage>`, `units: Rect<Unit>` | 设置内边距。四条边可用 length 或 percent，不支持 auto。 |
+| `border(value, units)` | `value: Rect<LengthPercentage>`, `units: Rect<Unit>` | 设置布局层面的边框厚度。四条边可用 length 或 percent，不支持 auto。 |
+
+示例：
+
+```rust
+use flor::taffy::{Dimension, LengthPercentageAuto, Rect, Size};
+use flor::view::builder::LayoutBuilder;
+use flor::view::resolver::{LayoutResolverExt, Unit};
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let view = div(views![label("内容")])
+    .layout(|layout| {
+        layout
+            .size(
+                Size {
+                    width: Dimension::Length(320.0),
+                    height: Dimension::Auto,
+                },
+                Size {
+                    width: Unit::Px,
+                    height: Unit::Px,
+                },
+            )
+            .margin(
+                Rect {
+                    left: LengthPercentageAuto::Length(12.0),
+                    right: LengthPercentageAuto::Length(12.0),
+                    top: LengthPercentageAuto::Length(8.0),
+                    bottom: LengthPercentageAuto::Length(8.0),
+                },
+                Rect {
+                    left: Unit::Px,
+                    right: Unit::Px,
+                    top: Unit::Px,
+                    bottom: Unit::Px,
+                },
+            )
+    });
+```
+
+## Flex 和 Grid 共享参数
+
+这些方法在启用 `layout-flex` 或 `layout-grid` 任意一个 feature 后可用。
+
+| 方法 | 参数 | 说明 |
+| --- | --- | --- |
+| `align_items(value)` | `value: AlignItems` | 设置子项在 cross/block axis 上如何对齐。 |
+| `align_self(value)` | `value: AlignSelf` | 设置当前节点自身在 cross/block axis 上如何对齐；未设置时回退到父级 `align_items`。 |
+| `align_content(value)` | `value: AlignContent` | 设置容器内容在 cross/block axis 上如何分布。 |
+| `justify_content(value)` | `value: JustifyContent` | 设置容器内容在 main/inline axis 上如何分布。 |
+| `gap(value, units)` | `value: Size<LengthPercentage>`, `units: Size<Unit>` | 设置两个方向的项目间距。字段名沿用 Taffy 的 `Size { width, height }`，对应 length 值分别用 `units.width` 和 `units.height` 解析。 |
+
+## Block 参数
+
+这些方法需要启用 `layout-block` feature。
+
+| 方法 | 参数 | 说明 |
+| --- | --- | --- |
+| `text_align(value)` | `value: TextAlign` | 设置 block 布局里行内方向的对齐方式。 |
+
+## Flex 参数
+
+这些方法需要启用 `layout-flex` feature。
+
+| 方法 | 参数 | 说明 |
+| --- | --- | --- |
+| `flex_direction(value)` | `value: FlexDirection` | 设置 flex 主轴方向。 |
+| `flex_wrap(value)` | `value: FlexWrap` | 设置 flex 子项是否换行。 |
+| `flex_basis(value, unit)` | `value: Dimension`, `unit: Unit` | 设置 flex 子项初始主轴尺寸。`Dimension::Length` 使用 `unit` 解析，`Percent` 和 `Auto` 不依赖单位。 |
+| `flex_grow(value)` | `value: f32` | 设置剩余空间增长比例。默认值是 0.0，传正数表示参与增长。 |
+| `flex_shrink(value)` | `value: f32` | 设置空间不足时的收缩比例。默认值是 1.0，传正数表示参与收缩。 |
+
+示例：
+
+```rust
+use flor::taffy::{AlignItems, Display, FlexDirection, JustifyContent};
+use flor::view::builder::LayoutBuilder;
+use flor::view::resolver::LayoutResolverExt;
+use flor::views;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let toolbar = div(views![label("左侧"), label("右侧")])
+    .layout(|layout| {
+        layout
+            .display(Display::Flex)
+            .flex_direction(FlexDirection::Row)
+            .align_items(AlignItems::Center)
+            .justify_content(JustifyContent::SpaceBetween)
+    });
+```
+
+## Grid 参数
+
+这些方法需要启用 `layout-grid` feature。
+
+| 方法 | 参数 | 说明 |
+| --- | --- | --- |
+| `justify_items(value)` | `value: AlignItems` | 设置 grid 子项在 inline axis 上如何对齐。 |
+| `justify_self(value)` | `value: AlignSelf` | 设置当前 grid 子项自身在 inline axis 上如何对齐；未设置时回退到父级 `justify_items`。 |
+| `grid_template_rows(value)` | `value: Vec<(TrackSizingFunction, Unit)>` | 设置显式 grid 行轨道尺寸。每个轨道携带一个 `Unit`，用于解析该轨道里的 length 值。 |
+| `grid_template_columns(value)` | `value: Vec<(TrackSizingFunction, Unit)>` | 设置显式 grid 列轨道尺寸。每个轨道携带一个 `Unit`，用于解析该轨道里的 length 值。 |
+| `grid_auto_rows(value)` | `value: Vec<(NonRepeatedTrackSizingFunction, Unit)>` | 设置隐式创建的 grid 行尺寸。 |
+| `grid_auto_columns(value)` | `value: Vec<(NonRepeatedTrackSizingFunction, Unit)>` | 设置隐式创建的 grid 列尺寸。 |
+| `grid_auto_flow(value)` | `value: GridAutoFlow` | 设置自动放置 grid item 的流向。 |
+| `grid_row(value)` | `value: Line<GridPlacement>` | 设置当前子项在 grid 行方向的起止位置。 |
+| `grid_column(value)` | `value: Line<GridPlacement>` | 设置当前子项在 grid 列方向的起止位置。 |
+
+## 可用性速查
+
+| 方法 | feature |
+| --- | --- |
+| `display`、`item_is_table`、`box_sizing`、`overflow`、`scrollbar_width`、`position`、`inset`、`size`、`min_size`、`max_size`、`aspect_ratio`、`margin`、`padding`、`border` | 始终生成 |
+| `align_items`、`align_self`、`align_content`、`justify_content`、`gap` | `layout-flex` 或 `layout-grid` |
+| `text_align` | `layout-block` |
+| `flex_direction`、`flex_wrap`、`flex_basis`、`flex_grow`、`flex_shrink` | `layout-flex` |
+| `justify_items`、`justify_self`、`grid_template_rows`、`grid_template_columns`、`grid_auto_rows`、`grid_auto_columns`、`grid_auto_flow`、`grid_row`、`grid_column` | `layout-grid` |

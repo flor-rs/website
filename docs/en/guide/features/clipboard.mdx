@@ -1,0 +1,46 @@
+# Clipboard
+
+`clipboard` feature is used to enable system clipboard read/write capability. It适合 implement copy, paste, import/export temporary text等功能.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "clipboard"] }
+```
+
+## Basic Usage
+
+Clipboard entry is in platform layer. When using import `ClipboardApi` trait, then create `Clipboard`.
+
+```rust
+use flor::base::platform::ClipboardApi;
+use flor::platform::clipboard::Clipboard;
+
+let clipboard = Clipboard(None);
+clipboard.set_clipboard_text("hello flor".to_string())?;
+
+let text = clipboard.get_clipboard_text()?;
+println!("{text}");
+```
+
+`Clipboard(None)` means not binding specific window. When need to associate clipboard operation with某 window, can pass `Some(window_id)`.
+
+```rust
+use flor::base::platform::ClipboardApi;
+use flor::platform::clipboard::Clipboard;
+
+let clipboard = Clipboard(Some(window_id));
+clipboard.set_clipboard_text("from this window".to_string())?;
+```
+
+## Supported Content
+
+`ClipboardApi` provides two类 entries:
+
+| Method | Purpose |
+| --- | --- |
+| `set_clipboard_text(...)` / `get_clipboard_text()` | Read/write text. |
+| `set_clipboard(...)` / `get_clipboard(...)` | Read/write raw bytes by clipboard format. |
+| `register_format(...)` | Register custom clipboard format. |
+| `set_clipboard_muti_type(...)` | Write multiple formats at once. |
+
+Common clipboard formats are represented by `ClipboardType`, including `Text`, `Image`, `Rtf`, `Html`, `Files`. If want to exchange complex data with other applications, can first register custom format, then read/write corresponding bytes.

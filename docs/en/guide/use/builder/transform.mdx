@@ -1,0 +1,111 @@
+# Transform Builder
+
+Transform Builder is used to set declarative `Transform2D` for widgets. It affects widget itself and its child widgets' drawing and hit testing, but doesn't change position and size calculated by Taffy layout.
+
+## Basic Writing
+
+After importing `TransformBuilder`, all widgets implementing `View` can call `.transform(...)`.
+
+```rust
+use flor::types::Transform2D;
+use flor::view::builder::TransformBuilder;
+use flor_lys::label::label;
+
+let title = label("Flor")
+    .transform(Transform2D::rotation_degrees(-3.0));
+```
+
+Current signature is:
+
+```rust
+pub trait TransformBuilder {
+    fn transform(self, transform: impl TransformProp) -> Self;
+}
+```
+
+`TransformProp` supports two writing styles:
+
+| Writing | Example | Suitable Scenario |
+| --- | --- | --- |
+| Fixed `Transform2D` | `.transform(Transform2D::translation(12.0, 0.0))` | Visual offset, rotation, scale that don't change after creation. |
+| Closure returning `Transform2D` | `.transform(move || Transform2D::rotation_degrees(angle.get()))` | Dynamic transform driven by signal. |
+
+## Dynamic Transform
+
+Closure version will recalculate transform when dependencies update.
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::types::Transform2D;
+use flor::view::builder::TransformBuilder;
+use flor_lys::label::label;
+
+let angle = create_signal(0.0f32);
+
+let spinner = label("loading")
+    .transform(move || Transform2D::rotate_at_degrees(angle.get(), 40.0, 12.0));
+```
+
+`rotate_at_degrees(degrees, cx, cy)` and `scale_at(sx, sy, cx, cy)` can express effect similar to `transform-origin`. Flor currently doesn't have separate `.origin(...)` builder.
+
+## Transform2D Common Constructors
+
+| API | Purpose |
+| --- | --- |
+| `Transform2D::IDENTITY` | Identity matrix. |
+| `Transform2D::new(m11, m12, m21, m22, dx, dy)` | Directly build matrix. |
+| `Transform2D::translation(x, y)` | Translation. |
+| `Transform2D::scale(sx, sy)` | Scale. |
+| `Transform2D::rotation(radians)` | Rotate by radians. |
+| `Transform2D::rotation_degrees(degrees)` | Rotate by degrees. |
+| `Transform2D::skew(x_rad, y_rad)` | Skew by radians. |
+| `Transform2D::skew_degrees(x_deg, y_deg)` | Skew by degrees. |
+| `Transform2D::rotate_at(radians, cx, cy)` | Rotate around specified point. |
+| `Transform2D::rotate_at_degrees(degrees, cx, cy)` | Rotate around specified point by degrees. |
+| `Transform2D::scale_at(sx, sy, cx, cy)` | Scale around specified point. |
+
+Chain combination uses `then_*` methods:
+
+```rust
+use flor::types::Transform2D;
+
+let transform = Transform2D::translation(16.0, 0.0)
+    .then_rotate_degrees(8.0)
+    .then_scale(1.05, 1.05);
+```
+
+Combination order is first apply current matrix, then apply new matrix. That is, above example will first translate, then rotate, finally scale.
+
+## Not CSS transform String
+
+`.transform(...)` receives `Transform2D`, not string. Currently doesn't have these builder methods:
+
+```rust
+// Currently doesn't exist
+.transform("rotate(45deg)")
+.rotate(45.0)
+.scale(1.2)
+.translate(10.0, 20.0)
+.skew(10.0, 0.0)
+.origin("center")
+```
+
+Corresponding writing should change to:
+
+```rust
+use flor::types::Transform2D;
+
+.transform(Transform2D::rotation_degrees(45.0))
+.transform(Transform2D::scale(1.2, 1.2))
+.transform(Transform2D::translation(10.0, 20.0))
+.transform(Transform2D::skew_degrees(10.0, 0.0))
+.transform(Transform2D::rotate_at_degrees(45.0, 50.0, 20.0))
+```
+
+## Mechanism Explanation
+
+`.transform(...)` will create a reactive updater. During initialization will immediately calculate `Transform2D` once, and call current widget's `ViewId::set_transform(transform)`; afterwards when signal depended by closure updates, will write new transform again and request redraw.
+
+Runtime transform is stored in `VIEW_STORAGE.transform`. Layout refresh phase will calculate accumulated transform, drawing phase will `push_transform`, hit testing will use inverse matrix to convert window coordinates back to widget local coordinates.
+
+If matrix is non-invertible, for example scale to `0.0`, hit testing cannot convert window coordinates back to local coordinates, this widget branch will be skipped. In animation don't scale interactive widgets to non-invertible matrix.

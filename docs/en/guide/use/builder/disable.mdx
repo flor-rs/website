@@ -1,0 +1,71 @@
+# Disable Builder
+
+Disable Builder is used to switch widget to `ControlState::Disabled`. It's application-side configuration widget state builder, not a method custom widget authors need to override in `View` trait.
+
+Currently exposed interface is:
+
+```rust
+pub trait DisableBuilder {
+    fn disable<F>(self, f: F) -> Self
+    where
+        F: Fn() -> bool + 'static;
+}
+```
+
+## Basic Writing
+
+After importing `DisableBuilder`, all widgets implementing `View` can call `.disable(...)`.
+
+```rust
+use flor::view::builder::DisableBuilder;
+use flor_lys::button::button;
+
+let save = button("Save").disable(|| true);
+```
+
+Closure returns `true` means disabled, returns `false` means normal. Fixed disable can directly write `|| true`, but more common is reading state from signal.
+
+## Reactive Disable
+
+`.disable(...)` will create a reactive updater. After signal read in closure changes, framework will recalculate disable state.
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+use flor::view::builder::DisableBuilder;
+use flor_lys::button::button;
+
+let saving = create_signal(false);
+
+let save = button("Save")
+    .disable(move || saving.get());
+
+// Disable button when starting save.
+saving.set(true);
+```
+
+When need to combine multiple conditions, directly write business judgment in closure:
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::view::builder::DisableBuilder;
+use flor_lys::button::button;
+
+let saving = create_signal(false);
+let form_valid = create_signal(false);
+
+let submit = button("Submit")
+    .disable(move || saving.get() || !form_valid.get());
+```
+
+## Mechanism Explanation
+
+`.disable(...)` internally will:
+
+1. Read current widget's `ViewId`.
+2. Use `create_updater_with_id` to create an updater.
+3. Write `ViewState.disable` when updater changes.
+4. Attach effect id to current `ViewId`'s pending effect list, widget creation process will activate it.
+
+Disable state participates in `ControlState` calculation, and has highest priority: `Disabled > Active > Focus > Hover > Normal`. Widget authors read `ControlState::Disabled` in `on_draw`, `on_measure` or event handling, decide visual and interaction behavior in disabled state.
+
+Disable doesn't automatically remove focus table entry, also doesn't automatically cancel current focus. When need runtime change focus capability, use [ViewId](/en/guide/control/view-id)'s focus API.

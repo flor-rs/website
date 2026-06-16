@@ -1,0 +1,170 @@
+[
+  {
+    "text": "花 · 框架",
+    "activeMatch": "/guide/",
+    "items": [
+      {
+        "text": "唠叨之书",
+        "link": "/guide/book-index"
+      },
+      {
+        "text": "快速了解",
+        "link": "/guide/startup"
+      },
+      {
+        "text": "AI",
+        "link": "/guide/ai"
+      },
+      {
+        "text": "使用框架",
+        "items": [
+          {
+            "text": "初始化",
+            "link": "/guide/use/init"
+          },
+          {
+            "text": "跨线程的响应式信号",
+            "link": "/guide/use/signal"
+          },
+          {
+            "text": "窗口创建与控制",
+            "link": "/guide/use/window"
+          },
+          {
+            "text": "外置事件",
+            "link": "/guide/use/handler"
+          },
+          {
+            "text": "控件状态",
+            "link": "/guide/use/control-state"
+          },
+          {
+            "text": "统一的 Builder 方法",
+            "items": [
+              {
+                "text": "焦点",
+                "link": "/guide/use/builder/focus"
+              },
+              {
+                "text": "事件",
+                "link": "/guide/use/builder/event"
+              },
+              {
+                "text": "布局",
+                "link": "/guide/use/builder/layout"
+              },
+              {
+                "text": "原子类",
+                "link": "/guide/use/builder/class"
+              },
+              {
+                "text": "样式",
+                "link": "/guide/use/builder/style"
+              },
+              {
+                "text": "层级",
+                "link": "/guide/use/builder/z-index"
+              },
+              {
+                "text": "变换",
+                "link": "/guide/use/builder/transform"
+              }
+            ]
+          },
+          {
+            "text": "Resolver Layer 机制",
+            "link": "/guide/use/resolver-layer"
+          },
+          {
+            "text": "框架 DSL",
+            "link": "/guide/use/framework-dsl"
+          },
+          {
+            "text": "焦点机制",
+            "link": "/guide/use/focus"
+          }
+        ]
+      },
+      {
+        "text": "框架能力",
+        "items": [
+          {
+            "text": "Feature 总览",
+            "link": "/guide/features/overview"
+          },
+          {
+            "text": "剪贴板",
+            "link": "/guide/features/clipboard"
+          },
+          {
+            "text": "拖放",
+            "link": "/guide/features/drag-drop"
+          },
+          {
+            "text": "系统托盘",
+            "link": "/guide/features/tray"
+          },
+          {
+            "text": "主题变化",
+            "link": "/guide/features/theme-change"
+          },
+          {
+            "text": "显示器信息",
+            "link": "/guide/features/monitor"
+          },
+          {
+            "text": "高 DPI",
+            "link": "/guide/features/hi-dpi"
+          },
+          {
+            "text": "跨线程窗口创建",
+            "link": "/guide/features/cross-thread-window-creation"
+          }
+        ]
+      },
+      {
+        "text": "控件开发",
+        "items": [
+          {
+            "text": "ViewId",
+            "link": "/guide/control/view-id"
+          },
+          {
+            "text": "View Trait",
+            "link": "/guide/control/view-trait"
+          },
+          {
+                "text": "Resolver",
+                "items": [
+                  {
+                    "text": "样式单位",
+                    "link": "/guide/control/resolver/style-unit"
+                  },
+                  {
+                    "text": "Resolver 结构体",
+                    "link": "/guide/control/resolver/resolver-struct"
+                  },
+                  {
+                    "text": "Resolver 派生宏",
+                    "link": "/guide/control/resolver/resolver-derive"
+                  },
+                  {
+                    "text": "class 共享解析方法",
+                    "link": "/guide/control/resolver/class-resolve"
+                  }
+                ]
+              },
+          {
+            "text": "从零开发控件",
+            "link": "/guide/control/create-widget"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "text": "API",
+    "link": "/api/",
+    "activeMatch": "/api/"
+  }
+]

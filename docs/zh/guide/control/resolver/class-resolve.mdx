@@ -1,0 +1,218 @@
+# 类名解析辅助函数
+
+`flor::view::resolver::shared` 提供类名解析的辅助函数，用于解析状态前缀、颜色、圆角、字重等常见样式类名。
+
+```rust
+use flor::view::resolver::shared::*;
+```
+
+## parse_state_prefix
+
+解析类名中的状态前缀，返回对应的 `ControlState` 和剩余类名。
+
+```rust
+pub fn parse_state_prefix(class: &str) -> (ControlState, &str)
+```
+
+### 支持的前缀
+
+| 前缀 | 返回状态 |
+| --- | --- |
+| `hover:` | `ControlState::Hover` |
+| `focus:` | `ControlState::Focus` |
+| `active:` | `ControlState::Active` |
+| `disabled:` | `ControlState::Disabled` |
+| 无前缀 | `ControlState::Normal` |
+
+### 示例
+
+```rust
+let (state, rest) = parse_state_prefix("hover:bg-red-500");
+// state = ControlState::Hover, rest = "bg-red-500"
+
+let (state, rest) = parse_state_prefix("bg-blue-200");
+// state = ControlState::Normal, rest = "bg-blue-200"
+```
+
+## extract_bracket_value
+
+提取方括号内的值，用于解析 `[value]` 形式的任意值类名。
+
+```rust
+pub fn extract_bracket_value(s: &str) -> Option<&str>
+```
+
+### 参数
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `s` | `&str` | 待解析的字符串 |
+
+### 返回值
+
+- 如果字符串以 `[` 开头并以 `]` 结尾，返回括号内的内容
+- 否则返回 `None`
+
+### 示例
+
+```rust
+let val = extract_bracket_value("[#fff]");
+// val = Some("#fff")
+
+let val = extract_bracket_value("#fff");
+// val = None
+```
+
+## parse_color
+
+解析颜色值，支持关键字、Hex 和 Tailwind 颜色名。
+
+```rust
+pub fn parse_color(value: &str) -> Option<Color>
+```
+
+### 支持的格式
+
+| 格式 | 示例 | 说明 |
+| --- | --- | --- |
+| 关键字 | `transparent`, `black`, `white` | 预定义颜色名 |
+| Hex | `#fff`, `#ffffff` | 3 位或 6 位十六进制 |
+| 括号 Hex | `[#fff]`, `[#ffffff]` | 方括号包裹的 Hex |
+| Tailwind | `red-500`, `blue-100` | TW 调色板名 |
+
+### Tailwind 调色板
+
+支持以下调色板，每个调色板包含 50、100、200、300、400、500、600、700、800、900、950 共 11 个色阶：
+
+- 灰色系：`slate`, `gray`, `zinc`, `neutral`
+- 红色系：`red`, `orange`, `amber`, `yellow`
+- 绿色系：`lime`, `green`, `emerald`, `teal`, `cyan`
+- 蓝色系：`sky`, `blue`, `indigo`
+- 紫色系：`violet`, `purple`, `fuchsia`, `pink`, `rose`
+
+### 示例
+
+```rust
+let color = parse_color("transparent");
+// color = Some(Color::rgba(0, 0, 0, 0))
+
+let color = parse_color("#fff");
+// color = Some(Color::from_hex_str("#fff"))
+
+let color = parse_color("red-500");
+// color = Some(Color::RED_500)
+
+let color = parse_color("slate-700");
+// color = Some(Color::SLATE_700)
+```
+
+## parse_tw_color
+
+解析 Tailwind 颜色名，返回对应的 `Color`。
+
+```rust
+pub fn parse_tw_color(color_name: &str, shade: &str) -> Option<Color>
+```
+
+### 参数
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `color_name` | `&str` | 调色板名称，如 `red`, `blue` |
+| `shade` | `&str` | 色阶数字，如 `500`, `100` |
+
+### 返回值
+
+- 如果调色板名和色阶都有效，返回对应的 `Color`
+- 否则返回 `None`
+
+### 示例
+
+```rust
+let color = parse_tw_color("red", "500");
+// color = Some(Color::RED_500)
+
+let color = parse_tw_color("emerald", "700");
+// color = Some(Color::EMERALD_700)
+
+let color = parse_tw_color("unknown", "500");
+// color = None
+```
+
+## parse_rounded
+
+解析 `rounded-*` 类名，返回圆角值。
+
+```rust
+pub fn parse_rounded(class: &str) -> Option<f32>
+```
+
+### 支持的类名
+
+| 类名 | 返回值 | 说明 |
+| --- | --- | --- |
+| `rounded-none` | `0.0` | 无圆角 |
+| `rounded-sm` | `2.0` | 小圆角 |
+| `rounded` | `4.0` | 默认圆角 |
+| `rounded-md` | `6.0` | 中等圆角 |
+| `rounded-lg` | `8.0` | 大圆角 |
+| `rounded-xl` | `12.0` | 更大圆角 |
+| `rounded-2xl` | `16.0` | 超大圆角 |
+| `rounded-3xl` | `24.0` | 巨大圆角 |
+| `rounded-full` | `9999.0` | 完全圆形 |
+| `rounded-[Npx]` | `N.0` | 自定义像素值 |
+| `rounded-[N]` | `N.0` | 自定义数值 |
+
+### 示例
+
+```rust
+let radius = parse_rounded("rounded-lg");
+// radius = Some(8.0)
+
+let radius = parse_rounded("rounded-[12px]");
+// radius = Some(12.0)
+
+let radius = parse_rounded("rounded-unknown");
+// radius = None
+```
+
+## parse_font_weight
+
+解析 `font-*` 类名中的字重，返回 `FontWeight`。
+
+```rust
+pub fn parse_font_weight(name: &str) -> Option<FontWeight>
+```
+
+### 支持的字重名
+
+| 类名 | 返回值 | CSS 字重 |
+| --- | --- | --- |
+| `font-thin` | `FontWeight::Thin` | 100 |
+| `font-extralight` | `FontWeight::ExtraLight` | 200 |
+| `font-light` | `FontWeight::Light` | 300 |
+| `font-normal` | `FontWeight::Normal` | 400 |
+| `font-medium` | `FontWeight::Medium` | 500 |
+| `font-semibold` | `FontWeight::SemiBold` | 600 |
+| `font-bold` | `FontWeight::Bold` | 700 |
+| `font-extrabold` | `FontWeight::ExtraBold` | 800 |
+| `font-black` | `FontWeight::Black` | 900 |
+
+### 参数
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | `&str` | 字重名称（不含 `font-` 前缀），如 `bold`, `medium` |
+
+### 示例
+
+```rust
+let weight = parse_font_weight("bold");
+// weight = Some(FontWeight::Bold)
+
+let weight = parse_font_weight("semibold");
+// weight = Some(FontWeight::SemiBold)
+
+let weight = parse_font_weight("unknown");
+// weight = None
+```

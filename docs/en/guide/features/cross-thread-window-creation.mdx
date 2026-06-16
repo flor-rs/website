@@ -1,0 +1,73 @@
+# Cross-thread Window Creation
+
+`cross-thread-window-creation` feature allows calling `WindowOption::open(...)` outside event loop thread to create windows.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "cross-thread-window-creation"] }
+```
+
+## When to Enable
+
+Judgment rule is simple: if application needs "create window anywhere" capability, must enable `cross-thread-window-creation` feature.
+
+Typical scenarios include calling `WindowOption::open(...)` in business thread, background task, async callback or non-event-loop thread. Once this call path exists, don't rely on人工 guaranteeing "just create window in correct thread".
+
+When not enabling this feature, `WindowOption::open(...)` will默认 create window directly in current thread. This适合 all windows created by event loop thread or main thread simple programs.
+
+But if creating window from non-event-loop thread without enabling this feature, framework可能 encounter platform UI thread restrictions, event loop sync issues, message queue waiting issues, even出现卡死 or deadlock. Therefore, as long as program存在 cross-thread window creation需求, should explicitly enable this feature.
+
+## Basic Behavior
+
+After enabling `cross-thread-window-creation`, `WindowOption::open(...)` still uses same API.
+
+When call happens outside event loop thread, Flor will post window creation request to event loop thread to process, and让 current thread wait for creation result. This can ensure window is真正 created by correct UI thread, while让 caller still获得 sync creation result.
+
+```rust
+use flor::windows::WindowOption;
+use flor_lys::label::label;
+
+std::thread::spawn(|| {
+    WindowOption::default()
+        .open(|_window| label("from worker thread"))
+        .expect("create window");
+});
+```
+
+## Usage Conditions
+
+Cross-thread window creation depends on event loop thread processing creation queue, therefore需要 satisfy one of following conditions:
+
+1. Event loop is already running;
+2. Creation request is already queued before event loop enters, afterwards will be processed by event loop thread.
+
+Common usage is: main thread initializes Flor, and enters `FlorGui.event_loop()?`; business thread calls `WindowOption::open(...)` when needed to request creating new window.
+
+```rust
+use flor::FlorGui;
+
+FlorGui.init()?;
+
+// Business thread中可以 request create window
+// ...
+
+FlorGui.event_loop()?;
+```
+
+## Why This Is a Feature
+
+`cross-thread-window-creation` will引入 additional cross-thread request queue, sync waiting and related scheduling logic, therefore will带来 certain performance and size overhead.
+
+For稍微大一些 GUI programs, this部分 overhead usually可以忽略不计. But for非常小 tool类 programs, especially all windows只在主线程 created programs, these additional logic不是必需的, size and startup path上额外 code也更值得控制.
+
+Therefore Flor designs it as optional feature: programs needing cross-thread window creation capability can explicitly enable; small programs not needing this capability can避免引入额外 overhead.
+
+## Platform Design Reason
+
+Many platforms have requirements for UI thread,其中 macOS explicitly requires UI-related operations running in main thread. This is also Flor采用这套设计的重要原因: framework需要让 application code可以从 business position发起 create window request, while still保证真正 window creation发生在正确 UI / event loop thread.
+
+为了兼容这类 platform restrictions, and避免在不同 thread直接 create window导致未定义 behavior, message loop卡住 or deadlock issues, Flor将 cross-thread window creation设计为"request post to event loop thread,由 event loop thread实际 create window"模式.
+
+That is, `cross-thread-window-creation`并不是让任意 thread真正直接 create window,而是让任意 thread都可以安全地 request create window,最终 window仍然由正确 UI / event loop thread完成创建.
+
+If your application all windows都在主线程 or event loop thread created, don't need to enable this feature.

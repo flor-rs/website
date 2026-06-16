@@ -1,0 +1,269 @@
+# External Events
+
+External events are a way to append event logic to already existing widgets. You don't need to implement a new `View` just to handle one click, one mouse move, one shortcut. Create widget then chain call `on_*` methods, hand closure to Flor.
+
+These `on_*` methods come from `EventBuilder`, import it before use:
+
+```rust
+use flor::view::builder::EventBuilder;
+```
+
+Complete signature see [Handler API](/en/api/handler). This page first learns by usage process: start from one click, then gradually use mouse position, keyboard, focus, lifecycle and drag-drop.
+
+## First Click Event
+
+Most common usage is directly接 `.on_click(...)` after widget:
+
+```rust
+use flor::signal::{Read, Write, create_signal};
+use flor::view::builder::EventBuilder;
+use flor_lys::button::button;
+use flor_lys::label::label;
+
+let count = create_signal(0);
+
+let click_count = count;
+let add = button("Add One").on_click(move |_, _, _| {
+    click_count.update(|value| *value += 1);
+});
+
+let text = label(move || format!("count: {}", count.get()));
+```
+
+`on_click`'s closure has three parameters:
+
+```rust
+|view_id, key_state, mouse_position| { ... }
+```
+
+Initially can write all as `_` like above, only focus on business logic. When need to know event source, mouse position or modifier key state, then补 parameter names back.
+
+Event closures usually write signal, send command, open window, request redraw, or post business message to own task system. Just remember one thing: event closures will execute in GUI event processing flow, don't do long blocking work inside.
+
+## Any View Can Attach Events
+
+`EventBuilder` is implemented for all types implementing `View`, so events are not button exclusive. A label, a container, a custom widget, as long as is `View`, can attach external events:
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let title = label("Click Title").on_click(|view_id, _, _| {
+    println!("clicked {view_id}");
+});
+```
+
+First parameter is always `ViewId` triggering event. It can be used to access widget state, request redraw, set focus, capture mouse etc. Normal business code不一定 needs it, but when you want to associate event with specific widget, it's most direct entry.
+
+## Mouse Position and Button State
+
+Mouse类 events mostly use same set of parameters:
+
+```rust
+|view_id, key_state, mouse_position|
+```
+
+`key_state` records mouse button and modifier key state when event occurs; `mouse_position` saves coordinates. For `on_mouse_move`, `on_button_down`, `on_button_up`, `on_click`, `on_double_click`这类 mouse hit events, coordinates will be converted to target widget's local coordinates, `(0, 0)` means widget top-left corner.
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let area = label("Drag Here").on_mouse_move(|view_id, key_state, pos| {
+    if key_state.lbutton_is_down {
+        println!("drag {view_id}: {}, {}", pos.x, pos.y);
+    }
+});
+```
+
+Click event is synthetic event: only when left button down and up both land on same hit widget, Flor will trigger `on_click`. If just want to know when button down or up, use `on_button_down` and `on_button_up`.
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let area = label("press area")
+    .on_button_down(|_, _, pos| {
+        println!("down at {}, {}", pos.x, pos.y);
+    })
+    .on_button_up(|_, _, pos| {
+        println!("up at {}, {}", pos.x, pos.y);
+    });
+```
+
+Right button also has corresponding events:
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("Right Button Operation").on_right_button_click(|_, _, pos| {
+    println!("right click: {}, {}", pos.x, pos.y);
+});
+```
+
+Middle button currently exposed `on_middle_button_down`, `on_middle_button_up` and `on_middle_button_double_click`. Source code has internal middle click synthesis logic, but external event API currently doesn't have `on_middle_button_click`.
+
+## Keyboard Events Need to Get Focus First
+
+Keyboard events are dispatched to currently focused widget. Normal widgets if want to participate in Tab focus order, need to配合 `focus_index`. More complete focus explanation see [Focus Mechanism](/en/guide/use/focus).
+
+```rust
+use flor::base::platform::{HandleResult, KeyCode};
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let shortcut_area = label("Press Ctrl+S")
+    .focus_index(1)
+    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+        if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
+            println!("save");
+            HandleResult::Handled
+        } else {
+            HandleResult::Default
+        }
+    });
+```
+
+`on_key_down` and `on_key_up` both need to return `HandleResult`:
+
+| Return Value | Meaning |
+| --- | --- |
+| `HandleResult::Handled` | This key is already handled by your code |
+| `HandleResult::Default` | Hand over to default flow to continue processing |
+
+Flor internal widget logic and external handler both可能 return `Handled`. As long as either side returns `Handled`, final result is `Handled`.
+
+## Focus Change
+
+`on_focus` and `on_blur` are used to listen to focus enter and leave. Closure receives `ViewId` and a `u16` type virtual focus number.
+
+Most widgets only have one focus point, this number is usually `0`. Few composite widgets can expose multiple virtual focus points through `View::on_focus_count`, then same widget internally can distinguish different focus positions.
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let focusable = label("Focusable Area")
+    .focus_index(1)
+    .on_focus(|view_id, virtual_index| {
+        println!("focus {view_id}, virtual index: {virtual_index}");
+    })
+    .on_blur(|view_id, virtual_index| {
+        println!("blur {view_id}, virtual index: {virtual_index}");
+    });
+```
+
+## Create Event
+
+`on_create` will trigger after widget tree mounts to window. It's suitable for doing initialization work depending on `ViewId` already entering widget tree.
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let view = label("created").on_create(|view_id| {
+    println!("created {view_id}");
+});
+```
+
+If just initializing normal Rust data, usually can directly complete before creating widget. Only when logic depends on widget already registered, already has `ViewId` and window relationship, then consider `on_create`.
+
+## Wheel Event
+
+Current wheel external event API name is `on_wheel_settings_changed`. It triggers in mouse wheel message path, closure receives scroll direction, scroll amount, button state and mouse position.
+
+```rust
+use flor::base::platform::ScrollAxis;
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let wheel_area = label("Scroll Here").on_wheel_settings_changed(
+    |view_id, axis, delta, key_state, pos| {
+        match axis {
+            ScrollAxis::Vertical => println!("vertical wheel: {delta}"),
+            ScrollAxis::Horizontal => println!("horizontal wheel: {delta}"),
+        }
+
+        if key_state.control_is_down {
+            println!("ctrl wheel on {view_id}: {}, {}", pos.x, pos.y);
+        }
+    },
+);
+```
+
+Wheel dispatch will from hit widget upward look for scrollable ancestor; if not found, then post to window root widget. Current this path passes in window client area coordinates, not target widget local coordinates.
+
+## Drag-Drop Events
+
+Drag-drop events need to enable `drag-drop` feature. Common flow is:
+
+1. `on_drag_enter` judges dragged in data format, sets `DropEffect`;
+2. `on_drag_over` continuously updates effect during drag move;
+3. `on_drop` reads real data and completes business processing;
+4. `on_drag_leave` cleans up hover state.
+
+```rust
+use flor::base::platform::{DragData, DragFormat, DropEffect};
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let drop_area = label("Drag Files Here")
+    .on_drag_enter(|_, _, _, formats, effect| {
+        let accepts_files = formats
+            .iter()
+            .any(|format| matches!(format, DragFormat::Files(_)));
+
+        if accepts_files {
+            *effect = DropEffect::Copy;
+        }
+    })
+    .on_drop(|_, _, _, data, effect| {
+        if let DragData::Files(files) = data {
+            for file in files {
+                println!("drop file: {}", file.display());
+            }
+            *effect = DropEffect::Copy;
+        }
+    });
+```
+
+`on_drag_enter` and `on_drag_over` receive available format list, haven't really取出 data; `on_drop` will receive `DragData`. Same as wheel, current drag-drop path passes in window client area coordinates.
+
+## Usage Suggestions
+
+External events are suitable for application layer logic: click button modify signal, press shortcut trigger command, drag-drop files to panel, update preview state when mouse move.
+
+If you are writing widget library, and event logic is widget itself inseparable part,优先 implement `View`'s internal `on_*` methods. For example how input field handles IME, cursor, selection and text editing, should belong to widget internal logic; application side only needs to bind higher-level external events or widget自己 exposed business callbacks.
+
+Event closures need to satisfy `Send + Sync + 'static`. Common practice is capture signal handle, `Arc`, channel sender, or other data that can safely long-term保存. Don't capture temporary references.
+
+## Mechanism Explanation
+
+This section is for understanding external events' position in Flor. Normal use doesn't need to read here first.
+
+When each `ViewId` is created, Flor will put a default `ViewHandler` in `VIEW_STORAGE.handlers`. `ViewHandler` is a set of optional handler slots, for example `on_click_handler`, `on_key_down_handler`, `on_focus_handler`.
+
+When you call:
+
+```rust
+view.on_click(|view_id, key_state, pos| {
+    // ...
+})
+```
+
+`EventBuilder` will take out this view's handler storage, convert closure into corresponding handler wrapper type, and write to `ViewHandler`'s `on_click_handler` slot. Method returns original `self`, so it can naturally continue chain calling.
+
+After event enters Flor from platform layer, approximate path is:
+
+1. Platform window procedure converts system message into `Message`;
+2. `WindowsProcHandler` hands message to `windows::event`;
+3. Event bus processes by event type: mouse events first hit test, keyboard events find current focus, drag-drop events maintain current drag-drop target;
+4. After finding target `ViewId` call corresponding `call_*` method;
+5. `call_*` first executes widget internal `View::on_*`, then executes external handler.
+
+Most events are "internal logic + external logic" both will execute. Keyboard events will merge both sides' `HandleResult`: either side returns `Handled`, final is `Handled`. Drag-drop events will first use internal `on_drag_*` return value to initialize `DropEffect`, then hand `&mut DropEffect` to external handler to modify.
+
+Tooltip is an internal special case: its `call_tooltip_show` and `call_tooltip_hide` use override mode, if external handler exists, only execute external handler; otherwise execute widget internal method. However current `EventBuilder` doesn't公开 tooltip corresponding chain method, normal users暂时 don't need to depend on this detail.
+
+There are also some handler slots already existing in API, but current event bus hasn't completely dispatched to external handler, for example `on_context_menu`, `on_destroy`, `on_resize`, `on_close_requested`, `on_work_area_changed`, `on_dpi_change` and `on_theme_changed`. When querying specific status, use [Handler API](/en/api/handler)'s "Current Dispatch Status" as standard.

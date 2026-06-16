@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "view-id",
+    "label": "ViewId"
+  },
+  {
+    "type": "file",
+    "name": "view-trait",
+    "label": "View Trait"
+  },
+  {
+    "type": "dir",
+    "name": "resolver",
+    "label": "Resolver"
+  },
+  {
+    "type": "file",
+    "name": "create-widget",
+    "label": "Creating Widgets"
+  }
+]

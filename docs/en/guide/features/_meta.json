@@ -1,0 +1,42 @@
+[
+  {
+    "type": "file",
+    "name": "overview",
+    "label": "Feature Overview"
+  },
+  {
+    "type": "file",
+    "name": "clipboard",
+    "label": "Clipboard"
+  },
+  {
+    "type": "file",
+    "name": "drag-drop",
+    "label": "Drag and Drop"
+  },
+  {
+    "type": "file",
+    "name": "tray",
+    "label": "System Tray"
+  },
+  {
+    "type": "file",
+    "name": "theme-change",
+    "label": "Theme Change"
+  },
+  {
+    "type": "file",
+    "name": "monitor",
+    "label": "Monitor Information"
+  },
+  {
+    "type": "file",
+    "name": "hi-dpi",
+    "label": "High DPI"
+  },
+  {
+    "type": "file",
+    "name": "cross-thread-window-creation",
+    "label": "Cross-thread Window Creation"
+  }
+]

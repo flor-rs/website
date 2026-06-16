@@ -1,0 +1,157 @@
+# Class Syntax Basics
+
+This page describes the general parsing rules for `.class(...)` strings. For usage instructions, see [Atomic Class Support](/en/guide/use/builder/class). For the complete list of layout classes, see [Layout Class Syntax](/en/api/layout-class).
+
+## Entry Point
+
+```rust
+use flor::view::builder::ClassBuilder;
+
+view.class("flex gap-2 p-4");
+```
+
+`ClassBuilder` requires the `class` feature to be enabled. There is only one public entry point:
+
+```rust
+pub trait ClassBuilder<M> {
+    fn class(self, class_str: M) -> Self;
+}
+```
+
+`M` needs to implement `ClassProp`. Currently supported inputs include:
+
+| Input | Example |
+| --- | --- |
+| `&'static str` | `.class("flex gap-2")` |
+| `String` | `.class(format!("w-[{}px]", width))` |
+| `Fn() -> String + 'static` | `.class(move || if open.get() { "block".into() } else { "hidden".into() })` |
+
+The closure form is re-evaluated by the reactive updater, suitable for scenarios where the class string depends on signals.
+
+## Splitting Rules
+
+The input string is split by whitespace characters:
+
+```text
+"flex flex-col gap-2 p-4"
+```
+
+Will be split into:
+
+```text
+flex
+flex-col
+gap-2
+p-4
+```
+
+There is no quote escaping or preserving spaces within class tokens. If special characters are needed in values, use the bracket arbitrary value syntax.
+
+## State Prefixes
+
+Class tokens can have a state prefix:
+
+| Prefix | State |
+| --- | --- |
+| No prefix | Normal |
+| `hover:` | Hover |
+| `focus:` | Focus |
+| `active:` | Active |
+| `disabled:` | Disabled |
+
+Example:
+
+```rust
+.class("p-2 hover:p-4 focus:bg-blue-50 disabled:opacity-50")
+```
+
+State prefixes are only parsed one level deep. Combined prefixes like `md:hover:p-4` or `hover:focus:p-4` are not currently parsed as multiple states.
+
+## Arbitrary Value Syntax
+
+Many classes support bracket notation:
+
+```text
+w-[320px]
+rounded-[10px]
+text-[#0f172a]
+aspect-[16/9]
+```
+
+The parser removes the outer `[` and `]`, then parses the value according to the corresponding property's syntax. Brackets are not supported for all classes; check the specific class documentation or widget implementation.
+
+## Length Values
+
+Layout classes and some widget style classes use unified length parsing.
+
+| Syntax | Example | Description |
+| --- | --- | --- |
+| Bare number | `4` | Parsed according to Tailwind spacing conventions, `4` equals `1rem`. With default `1rem = 16px`, `4` equals `16px`. |
+| `px` | `12px` | Pixels. |
+| `rem` | `1.5rem` | Uses the current window's `WindowOption::rem_px`, default `16.0`. |
+| `pt` | `12pt` | Uses current window DPI, formula is `1pt = dpi / 72 px`. |
+| `vw` | `50vw` | Percentage of current window client area width. |
+| `vh` | `50vh` | Percentage of current window client area height. |
+| Percentage | `50%` | Parsed as percentage. |
+| Fraction | `1/2` | Converted to percentage. |
+
+Examples:
+
+```text
+p-4
+w-1/2
+h-[240px]
+mt-[1rem]
+max-h-[80vh]
+```
+
+## Keywords
+
+Different properties support different keywords. Common keywords include:
+
+| Keyword | Common Usage |
+| --- | --- |
+| `auto` | `Dimension::Auto` or auto margin. |
+| `full` | 100%. |
+| `screen` | Current window client area width or height. |
+| `fit` / `min` / `max` | Treated as auto in current size parsing. |
+
+For the scope of layout class support for these keywords, see [Layout Class Syntax](/en/api/layout-class). For widget style class support, see the widget library documentation for specific widgets.
+
+## Color Values
+
+Widget style classes using Flor's shared color parsing typically support:
+
+| Syntax | Example |
+| --- | --- |
+| Keywords | `transparent`, `black`, `white` |
+| Hexadecimal | `#fff`, `#ffffff` |
+| Bracket hex | `[#0f172a]` |
+| Tailwind palette | `slate-900`, `blue-600`, `red-500` |
+
+Whether color parsing is used for a specific class is determined by the widget. For example, whether `text-blue-600` or `bg-slate-100` works depends on whether the current widget implements the corresponding style class.
+
+## Shared Style Helper Syntax
+
+Some widgets reuse these parsing functions:
+
+| Syntax | Example | Description |
+| --- | --- | --- |
+| `rounded` | `rounded` | 4px corner radius. |
+| `rounded-*` | `rounded-none`, `rounded-sm`, `rounded-md`, `rounded-lg`, `rounded-xl`, `rounded-2xl`, `rounded-3xl`, `rounded-full` | Common corner radius presets. |
+| `rounded-[Npx]` | `rounded-[10px]` | Custom corner radius. |
+| `font-*` | `font-thin`, `font-light`, `font-normal`, `font-medium`, `font-semibold`, `font-bold`, `font-black` | Font weight. |
+
+These are shared parsing capabilities, not automatically supported by all widgets. Widgets must use these parsing results in their own class update logic.
+
+## Processing Path
+
+Class names passed to `.class(...)` go through these user-visible processing steps:
+
+1. Split by whitespace into multiple class tokens.
+2. `z-*` is handled as widget layer level.
+3. Other tokens are split into state and actual class name by state prefix.
+4. The actual class name is passed to the widget's style parsing logic.
+5. The same batch of classes is also passed to the layout class parsing logic.
+
+For specific layout class support, see [Layout Class Syntax](/en/api/layout-class). For widget style class support, see the widget documentation or widget source code.

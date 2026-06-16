@@ -1,0 +1,270 @@
+# ViewId
+
+`ViewId` 是控件在 Flor 运行时里的标识和操作句柄。控件树、布局状态、事件 handler、焦点表、滚动状态、鼠标捕获和渲染资源都通过它关联到同一个控件。
+
+这一页面面向两类场景：在事件回调中操作当前控件，或在自定义控件实现里通过 `self.view_id` 访问运行时能力。只想配置焦点顺序时，优先看 [焦点 Builder](/zh/guide/use/builder/focus)。
+
+## 获取 ViewId
+
+事件 builder 回调会把目标控件的 `ViewId` 作为第一个参数传入：
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("点击")
+    .on_click(|view_id, key_state, mouse_position| {
+        println!("{view_id} clicked at {mouse_position:?}");
+    });
+```
+
+自定义控件通常把 `ViewId` 存成字段，并在构造函数里创建：
+
+```rust
+use flor::view::{View, ViewId};
+
+pub struct MyView {
+    view_id: ViewId,
+}
+
+impl MyView {
+    pub fn new() -> Self {
+        Self {
+            view_id: ViewId::new(),
+        }
+    }
+}
+
+impl View for MyView {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+}
+```
+
+`ViewId::new()` 会注册基础的 `ViewState` 和 `ViewHandler`。`ViewId::new_with_layout(...)` 允许创建时自定义 `LayoutResolver`，一般只在底层控件或布局系统需要接管初始 layout resolver 时使用。
+
+## 重绘请求
+
+> **这是 Flor 控件开发的最高级别硬规范，请务必遵守。**
+
+无论你的控件是跑在即时模式还是保留模式，只要内部影响视觉的属性发生变更，就必须调用 `view_id.request_redraw()`。
+
+```rust
+// 在 on_update_state、on_frame、事件回调或任何修改视觉属性的地方
+self.color = new_color;
+self.view_id.request_redraw(); // 必须调用
+```
+
+Flor 不会自动追踪控件内部字段的变化。如果你修改了颜色、文本、图片句柄、动画状态等任何会影响绘制结果的字段，却不调用 `request_redraw()`，窗口不会重绘，用户就看不到变化。
+
+这条规范适用于：
+
+- `on_update_state` 里更新字段后
+- `on_frame` 里推进动画状态后
+- 事件回调里修改内部状态后
+- 任何自定义方法里改变视觉属性后
+
+如果你在实现自定义控件时发现视觉没有更新，首先检查是否遗漏了 `request_redraw()` 调用。控件开发的其他章节会反复强调这一点，例如 [View Trait 的生命周期钩子](/zh/guide/control/view-trait#生命周期与状态)。
+
+## 状态与布局
+
+`ViewId` 可以读取当前控件的布局和状态：
+
+```rust
+let layout = view_id.layout()?;
+let abs = view_id.abs_location()?;
+let style = view_id.get_current_style()?;
+
+let size = view_id.with_state(|state| state.layout.size)?;
+view_id.with_state_mut(|state| {
+    state.disable = true;
+})?;
+```
+
+`layout()` 返回 Taffy 计算后的 `taffy::Layout`。`abs_location()` 返回相对窗口左上角的绝对位置，这个值在布局刷新时写入缓存。
+
+`with_state` 和 `with_state_mut` 是闭包式访问接口：它们只在闭包执行期间持有内部状态锁。闭包里不要再做长时间工作，也不要把借用到的状态引用保存出去。
+
+`get_current_style()` 和 `with_current_style(...)` 会按当前 `ControlState` 读取样式。当前状态会影响 resolver 选择 `normal`、`hover`、`focus`、`active` 或 `disabled` 变体。
+
+## 状态更新
+
+`update_state` 会把任意 `Box<dyn Any>` 交给控件实例的 `View::on_update_state`，然后请求重绘：
+
+```rust
+view_id.update_state(Box::new(String::from("新的标题")));
+```
+
+控件需要在自己的 `on_update_state` 中 downcast 并更新内部字段。比如文本、图片句柄、样式更新对象这类控件私有状态都适合走这条路径。
+
+如果启用了 `class` feature，`update_class(layer_id, class_str)` 会解析类名，更新 layout resolver，并调用控件的 `on_update_class(control_state, class)`。`z-*` 类会被识别为 z-index 并从 class 列表中移除。
+
+## 控件树与窗口
+
+`ViewId` 记录控件在树中的关系和所属窗口：
+
+```rust
+let parent = view_id.parent_view_id();
+let window = view_id.window_id();
+
+parent_view_id.push_view(Box::new(child));
+```
+
+`push_view` 会把子控件加入当前控件，重建子树窗口归属，并触发父控件的 `on_child_push`。应用层通常通过 `ViewBuilder::views`、`ViewBuilder::push_view` 或 `views![]` 宏组织树；直接调用 `ViewId::push_view` 更适合运行时追加子控件。
+
+## 焦点操控
+
+焦点机制的用户侧说明见 [焦点机制](/zh/guide/use/focus)。这里列出 `ViewId` 上和焦点相关的运行时方法。
+
+```rust
+impl ViewId {
+    pub fn update_focus_index(self, focus_index: Option<u32>);
+    pub fn set_focus(self, virtual_index: Option<u16>);
+    pub fn is_focused(self) -> bool;
+    pub fn push_focus_scope(self);
+    pub fn pop_focus_scope(self);
+}
+```
+
+### update_focus_index
+
+`update_focus_index` 在运行时更新控件是否参与焦点表。
+
+```rust
+view_id.update_focus_index(Some(0));  // 加入或更新焦点表，排序值为 0
+view_id.update_focus_index(Some(10)); // 加入或更新焦点表，排序值为 10
+view_id.update_focus_index(None);     // 从焦点表移除
+```
+
+`Some(0)` 是合法排序值。`None` 才表示退出焦点系统。
+
+当前实现按单焦点条目更新：它会先移除这个 `ViewId` 已有的焦点条目，再在 `Some(index)` 时插入 `(index, view_id, 0)`。如果控件开发者实现了多个虚拟焦点，初始化焦点表会按 `on_focus_count()` 展开；运行时 `update_focus_index` 目前只插入虚拟焦点 `0`。
+
+### set_focus
+
+`set_focus` 设置或取消当前焦点。
+
+```rust
+view_id.set_focus(Some(0)); // 聚焦到第一个虚拟焦点
+view_id.set_focus(Some(1)); // 聚焦到第二个虚拟焦点
+view_id.set_focus(None);    // 如果当前焦点在这个 ViewId 上，就取消它
+```
+
+`set_focus(Some(index))` 要求这个 `(ViewId, virtual_index)` 已经存在于焦点表。没有设置 `focus_index` 的控件不会被成功聚焦。传入不存在的虚拟焦点序号时，方法不会改变当前焦点。
+
+`set_focus(None)` 只清除这个 `ViewId` 当前持有的焦点：如果当前焦点在它身上，会触发 `blur` 并让窗口进入无当前焦点状态；如果当前焦点在别的控件上，不会清掉别的控件。
+
+### is_focused
+
+`is_focused` 判断当前焦点是否在这个 `ViewId` 上，不区分虚拟焦点序号。
+
+```rust
+if view_id.is_focused() {
+    println!("focused");
+}
+```
+
+### push_focus_scope 与 pop_focus_scope
+
+这两个方法用于运行时焦点作用域。打开 Modal、Popup、侧边栏时，把根控件压入作用域；关闭时弹出作用域。
+
+```rust
+dialog_root_id.push_focus_scope();
+
+// 关闭弹出层时
+dialog_root_id.pop_focus_scope();
+```
+
+压入作用域后，Tab 和 Shift+Tab 只在这个根控件的子树里循环。`pop_focus_scope` 会弹出当前作用域，并尝试恢复进入作用域之前的焦点。
+
+## 控件状态
+
+`ViewId` 可以判断控件的运行时交互状态：
+
+```rust
+let state = view_id.control_state();
+let focused = view_id.is_focused();
+let hovered = view_id.is_hover();
+let active = view_id.is_active();
+```
+
+`control_state()` 的优先级是 `Disabled > Active > Focus > Hover > Normal`。`control_state_with_pressed(pressed)` 允许控件用一个临时按下状态计算 `ControlState`，但它只考虑 `Disabled`、传入的 `pressed`、`Hover` 和 `Normal`。
+
+`is_active()` 查询的是框架记录的 pressed 状态。`is_hover()` 查询的是所属窗口当前的 hover 目标。
+
+## 可见性与层级
+
+
+
+`z_index` 控制同一父节点下的绘制和命中顺序：
+
+```rust
+view_id.set_z_index(10);
+let z = view_id.z_index();
+```
+
+`set_z_index()` 会更新存储里的 z-index，并在有父节点时重新排序同级子节点。
+
+`visual()` 返回当前控件是否在最近一次绘制中被标记为可见。框架内部会用它跳过不可见控件的 `on_frame`，自定义控件一般只需要知道：这个值来自绘制阶段的可见性缓存，不是布局样式的完整替代。
+
+## 滚动
+
+滚动能力由控件注册 `ScrollState` 后生效：
+
+```rust
+if view_id.is_scroll_view() {
+    let current = view_id.scroll_offset();
+    let max = view_id.max_scroll_offset();
+}
+
+view_id.scroll_to(0.0, 120.0);
+view_id.scroll_by(0.0, 32.0);
+view_id.scroll_to_top();
+view_id.scroll_to_bottom();
+```
+
+`scroll_to` 和 `scroll_by` 会把目标值钳制到 `0.0..=max`。如果这个 `ViewId` 没有注册滚动状态，这些方法不会改变任何东西。滚动位置改变时会请求重绘。
+
+## 鼠标捕获
+
+拖拽、滚动条拖动、按住鼠标后继续跟踪移动时，可以捕获鼠标：
+
+```rust
+view_id.capture_mouse()?;
+view_id.release_mouse()?;
+```
+
+捕获后，窗口会记录 `capture_view_id`，平台层也会进入鼠标捕获状态。释放后，事件回到普通命中测试路径。
+
+## Transform 与坐标转换
+
+声明式 transform 会影响控件自身和子控件的绘制、布局后的累积变换以及命中测试：
+
+```rust
+use flor::types::Transform2D;
+
+view_id.set_transform(Transform2D::translation(12.0, 0.0));
+let transform = view_id.get_transform();
+view_id.clear_transform();
+```
+
+`set_transform` 和 `clear_transform` 会请求重绘。布局刷新后，框架会计算每个控件的 accumulated transform。需要把窗口坐标转换为控件局部坐标时，可以用：
+
+```rust
+let local = view_id.window_to_local_position(mouse_position);
+```
+
+如果没有累积变换，或变换不可逆，这个方法会返回原始坐标。
+
+## 渲染资源加载
+
+`ViewId` 实现了 `LoadRenderResource`，可以用所属窗口的 renderer 创建图片资源：
+
+```rust
+use flor::render::LoadRenderResource;
+
+let image = view_id.load_image(bytes)?;
+```
+
+`load_raw_image` 支持原始帧数据和帧延迟。启用 `svg` feature 后还可以调用 `load_svg`。如果当前 `ViewId` 找不到对应 renderer，这些方法会返回 `FlorRendererError::RenderNotFound`。

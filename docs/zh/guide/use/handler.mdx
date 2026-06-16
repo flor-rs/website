@@ -1,0 +1,269 @@
+# 外置事件
+
+外置事件是给已经存在的控件追加事件逻辑的方式。你不需要为了处理一次点击、一次鼠标移动、一个快捷键，就去实现一个新的 `View`。把控件创建出来以后，接着链式调用 `on_*` 方法，把闭包交给 Flor 就可以。
+
+这些 `on_*` 方法来自 `EventBuilder`，使用前先导入它：
+
+```rust
+use flor::view::builder::EventBuilder;
+```
+
+完整签名见 [Handler API](/zh/api/handler)。这一页先按使用过程来学：从一次点击开始，再逐步用到鼠标位置、键盘、焦点、生命周期和拖放。
+
+## 第一个点击事件
+
+最常见的用法，是在控件后面直接接 `.on_click(...)`：
+
+```rust
+use flor::signal::{Read, Write, create_signal};
+use flor::view::builder::EventBuilder;
+use flor_lys::button::button;
+use flor_lys::label::label;
+
+let count = create_signal(0);
+
+let click_count = count;
+let add = button("加一").on_click(move |_, _, _| {
+    click_count.update(|value| *value += 1);
+});
+
+let text = label(move || format!("count: {}", count.get()));
+```
+
+`on_click` 的闭包有三个参数：
+
+```rust
+|view_id, key_state, mouse_position| { ... }
+```
+
+刚开始可以像上面一样全部写成 `_`，只关注业务逻辑。需要知道事件来源、鼠标位置或修饰键状态时，再把参数名字补回来。
+
+事件闭包通常会写 signal、发命令、打开窗口、请求重绘，或者把业务消息投递到自己的任务系统里。只要记住一件事：事件闭包会在 GUI 事件处理流程中执行，不要在里面做长时间阻塞的工作。
+
+## 任何 View 都可以挂事件
+
+`EventBuilder` 是给所有实现了 `View` 的类型实现的，所以事件不是按钮专属。一个标签、一个容器、一个自定义控件，只要是 `View`，都可以挂外置事件：
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let title = label("点击标题").on_click(|view_id, _, _| {
+    println!("clicked {view_id}");
+});
+```
+
+第一个参数永远是触发事件的 `ViewId`。它可以用来访问控件状态、请求重绘、设置焦点、捕获鼠标等。普通业务代码不一定需要它，但当你要把事件和具体控件关联起来时，它就是最直接的入口。
+
+## 鼠标位置和按键状态
+
+鼠标类事件大多使用同一组参数：
+
+```rust
+|view_id, key_state, mouse_position|
+```
+
+`key_state` 记录事件发生时的鼠标按钮和修饰键状态；`mouse_position` 保存坐标。对 `on_mouse_move`、`on_button_down`、`on_button_up`、`on_click`、`on_double_click` 这类鼠标命中事件来说，坐标会被转换成目标控件的局部坐标，`(0, 0)` 表示控件左上角。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let area = label("拖动这里").on_mouse_move(|view_id, key_state, pos| {
+    if key_state.lbutton_is_down {
+        println!("drag {view_id}: {}, {}", pos.x, pos.y);
+    }
+});
+```
+
+点击事件是合成事件：左键按下和松开都落在同一个命中控件上时，Flor 才会触发 `on_click`。如果只是想知道按钮什么时候按下或松开，使用 `on_button_down` 和 `on_button_up`。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let area = label("press area")
+    .on_button_down(|_, _, pos| {
+        println!("down at {}, {}", pos.x, pos.y);
+    })
+    .on_button_up(|_, _, pos| {
+        println!("up at {}, {}", pos.x, pos.y);
+    });
+```
+
+右键也有对应事件：
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("右键操作").on_right_button_click(|_, _, pos| {
+    println!("right click: {}, {}", pos.x, pos.y);
+});
+```
+
+中键当前暴露了 `on_middle_button_down`、`on_middle_button_up` 和 `on_middle_button_double_click`。源码里有内部的 middle click 合成逻辑，但外置事件 API 当前没有 `on_middle_button_click`。
+
+## 键盘事件要先拿到焦点
+
+键盘事件派发给当前获得焦点的控件。普通控件如果想参与 Tab 焦点顺序，需要配合 `focus_index`。更完整的焦点说明见 [焦点机制](/zh/guide/use/focus)。
+
+```rust
+use flor::base::platform::{HandleResult, KeyCode};
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let shortcut_area = label("按 Ctrl+S")
+    .focus_index(1)
+    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+        if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
+            println!("save");
+            HandleResult::Handled
+        } else {
+            HandleResult::Default
+        }
+    });
+```
+
+`on_key_down` 和 `on_key_up` 都要返回 `HandleResult`：
+
+| 返回值 | 含义 |
+| --- | --- |
+| `HandleResult::Handled` | 这个按键已经由你的代码处理 |
+| `HandleResult::Default` | 交给默认流程继续处理 |
+
+Flor 内部控件逻辑和外置 handler 都可能返回 `Handled`。只要其中任意一边返回 `Handled`，最终结果就是 `Handled`。
+
+## 焦点变化
+
+`on_focus` 和 `on_blur` 用于监听焦点进入和离开。闭包收到 `ViewId` 和一个 `u16` 类型的虚拟焦点序号。
+
+大多数控件只有一个焦点点位，这个序号通常是 `0`。少数复合控件可以通过 `View::on_focus_count` 暴露多个虚拟焦点点位，这时同一个控件内部可以区分不同焦点位置。
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let focusable = label("可聚焦区域")
+    .focus_index(1)
+    .on_focus(|view_id, virtual_index| {
+        println!("focus {view_id}, virtual index: {virtual_index}");
+    })
+    .on_blur(|view_id, virtual_index| {
+        println!("blur {view_id}, virtual index: {virtual_index}");
+    });
+```
+
+## 创建事件
+
+`on_create` 会在控件树挂载到窗口以后触发。它适合做依赖 `ViewId` 已经进入控件树的初始化工作。
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let view = label("created").on_create(|view_id| {
+    println!("created {view_id}");
+});
+```
+
+如果只是初始化普通 Rust 数据，通常直接在创建控件前完成即可。只有当逻辑依赖控件已经注册、已经有 `ViewId` 和窗口关系时，再考虑 `on_create`。
+
+## 滚轮事件
+
+当前滚轮外置事件的 API 名称是 `on_wheel_settings_changed`。它在鼠标滚轮消息路径中触发，闭包收到滚动方向、滚动量、按键状态和鼠标位置。
+
+```rust
+use flor::base::platform::ScrollAxis;
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let wheel_area = label("滚动这里").on_wheel_settings_changed(
+    |view_id, axis, delta, key_state, pos| {
+        match axis {
+            ScrollAxis::Vertical => println!("vertical wheel: {delta}"),
+            ScrollAxis::Horizontal => println!("horizontal wheel: {delta}"),
+        }
+
+        if key_state.control_is_down {
+            println!("ctrl wheel on {view_id}: {}, {}", pos.x, pos.y);
+        }
+    },
+);
+```
+
+滚轮派发会从命中的控件向上寻找可滚动祖先；如果没有找到，就投递给窗口根控件。当前这条路径传入的是窗口客户区坐标，而不是目标控件局部坐标。
+
+## 拖放事件
+
+拖放事件需要启用 `drag-drop` feature。常见流程是：
+
+1. `on_drag_enter` 判断拖入的数据格式，设置 `DropEffect`；
+2. `on_drag_over` 在拖拽移动时持续更新效果；
+3. `on_drop` 读取真正的数据并完成业务处理；
+4. `on_drag_leave` 清理悬停状态。
+
+```rust
+use flor::base::platform::{DragData, DragFormat, DropEffect};
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let drop_area = label("拖文件到这里")
+    .on_drag_enter(|_, _, _, formats, effect| {
+        let accepts_files = formats
+            .iter()
+            .any(|format| matches!(format, DragFormat::Files(_)));
+
+        if accepts_files {
+            *effect = DropEffect::Copy;
+        }
+    })
+    .on_drop(|_, _, _, data, effect| {
+        if let DragData::Files(files) = data {
+            for file in files {
+                println!("drop file: {}", file.display());
+            }
+            *effect = DropEffect::Copy;
+        }
+    });
+```
+
+`on_drag_enter` 和 `on_drag_over` 收到的是可用格式列表，还没有真正取出数据；`on_drop` 才会收到 `DragData`。和滚轮一样，当前拖放路径传入的是窗口客户区坐标。
+
+## 使用建议
+
+外置事件适合应用层逻辑：点击按钮修改 signal、按快捷键触发命令、拖放文件到面板、在鼠标移动时更新预览状态。
+
+如果你是在写控件库，并且事件逻辑是控件本身不可分割的一部分，优先实现 `View` 的内部 `on_*` 方法。比如一个输入框如何处理 IME、光标、选区和文本编辑，应该属于控件内部逻辑；应用侧只需要绑定更高层的外置事件或控件自己暴露的业务回调。
+
+事件闭包需要满足 `Send + Sync + 'static`。常见做法是捕获 signal 句柄、`Arc`、通道发送端，或者其他能安全长期保存的数据。不要捕获临时引用。
+
+## 机制说明
+
+这一节用于理解外置事件在 Flor 里的位置。普通使用不需要先读这里。
+
+每个 `ViewId` 创建时，Flor 会在 `VIEW_STORAGE.handlers` 里放入一个默认的 `ViewHandler`。`ViewHandler` 是一组可选 handler 槽位，例如 `on_click_handler`、`on_key_down_handler`、`on_focus_handler`。
+
+当你调用：
+
+```rust
+view.on_click(|view_id, key_state, pos| {
+    // ...
+})
+```
+
+`EventBuilder` 会取出这个 view 的 handler 存储，把闭包转换成对应的 handler 包装类型，并写入 `ViewHandler` 的 `on_click_handler` 槽位。方法返回原来的 `self`，所以它可以自然地继续链式调用。
+
+事件从平台层进入 Flor 后，大致路径是：
+
+1. 平台窗口过程把系统消息转换成 `Message`；
+2. `WindowsProcHandler` 把消息交给 `windows::event`；
+3. 事件总线按事件类型处理：鼠标事件先命中测试，键盘事件找当前焦点，拖放事件维护当前拖放目标；
+4. 找到目标 `ViewId` 后调用对应的 `call_*` 方法；
+5. `call_*` 先执行控件内部的 `View::on_*`，再执行外置 handler。
+
+大多数事件都是“内部逻辑 + 外置逻辑”都会执行。键盘事件会把两边的 `HandleResult` 合并：任意一边返回 `Handled`，最终就是 `Handled`。拖放事件会先用内部 `on_drag_*` 的返回值初始化 `DropEffect`，再把 `&mut DropEffect` 交给外置 handler 修改。
+
+Tooltip 是一个内部特例：它的 `call_tooltip_show` 和 `call_tooltip_hide` 使用覆盖模式，如果存在外置 handler，就只执行外置 handler；否则执行控件内部方法。不过当前 `EventBuilder` 没有公开 tooltip 对应的链式方法，普通用户暂时不需要依赖这个细节。
+
+还有一些 handler 槽位已经在 API 中存在，但当前事件总线没有完整派发到外置 handler，例如 `on_context_menu`、`on_destroy`、`on_resize`、`on_close_requested`、`on_work_area_changed`、`on_dpi_change` 和 `on_theme_changed`。查询具体状态时，以 [Handler API](/zh/api/handler) 的“当前派发状态”为准。

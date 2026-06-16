@@ -1,0 +1,42 @@
+[
+  {
+    "type": "file",
+    "name": "overview",
+    "label": "Feature 总览"
+  },
+  {
+    "type": "file",
+    "name": "clipboard",
+    "label": "剪贴板"
+  },
+  {
+    "type": "file",
+    "name": "drag-drop",
+    "label": "拖放"
+  },
+  {
+    "type": "file",
+    "name": "tray",
+    "label": "系统托盘"
+  },
+  {
+    "type": "file",
+    "name": "theme-change",
+    "label": "主题变化"
+  },
+  {
+    "type": "file",
+    "name": "monitor",
+    "label": "显示器信息"
+  },
+  {
+    "type": "file",
+    "name": "hi-dpi",
+    "label": "高 DPI"
+  },
+  {
+    "type": "file",
+    "name": "cross-thread-window-creation",
+    "label": "跨线程窗口创建"
+  }
+]

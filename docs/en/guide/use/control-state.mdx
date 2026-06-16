@@ -1,0 +1,119 @@
+# Widget State
+
+Flor framework has implemented a complete widget state system to manage widget's state performance in different interaction scenarios.
+
+## ControlState Enum Definition
+
+```rust
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Default)]
+pub enum ControlState {
+    #[default]
+    Normal,
+    Focus,
+    Hover,
+    Active,
+    Disabled,
+}
+```
+
+## State Model Design
+
+Flor framework defines five basic states for widgets:
+
+- **Normal**: Normal state, widget's default state
+- **Focus**: Focus state, when widget gets keyboard focus
+- **Hover**: Hover state, when mouse hovers over widget
+- **Active**: Active state, when widget is pressed or clicked
+- **Disabled**: Disabled state, when widget is not interactive
+
+## State Classification
+
+Among these states, they can be divided into two categories:
+
+### Enhanced States
+
+Enhanced states are states added on top of base state, won't prevent user interaction:
+
+- **Focus**: Supplementary state, indicates widget got focus
+- **Hover**: Supplementary state, indicates mouse hover
+- **Active**: Supplementary state, indicates widget is activated
+
+### Terminal State
+
+Terminal state will prevent user interaction, widget enters unavailable state:
+
+- **Disabled**: Independent state, widget is completely disabled
+
+## State Inheritance Relationship
+
+Flor framework implements state inheritance relationship as follows:
+
+```
+Normal
+  ├─ Focus
+  ├─ Hover
+  │    └─ Active
+  └─ Disabled (Independent)
+```
+
+## Inheritance Rules
+
+| State | Inherits From | Reason |
+|------|--------|------|
+| Normal | None | Base state, foundation for all other states |
+| Focus | Normal | Focus is just supplementary, doesn't change widget's basic behavior |
+| Hover | Normal | Hover is just supplementary, provides visual feedback |
+| Active | Hover -> Focus -> Normal | Active is usually continuation of Hover, user presses widget |
+| Disabled | Doesn't inherit any state | Disabled should be completely isolated, prevent all interactions |
+
+### Inheritance Chain Explanation
+
+**Active's inheritance chain**:
+- First check if in Hover state
+- If not Hover, check if in Focus state
+- If neither, inherit from Normal state
+
+**Disabled's special handling**:
+- Disabled state is completely independent, doesn't inherit any other state's styles
+- In disabled state, widget displays unavailable visual effect
+- All interaction events are ignored
+
+## State Transition
+
+Transitions between widget states follow these rules:
+
+1. **Normal → Focus**: Widget gets keyboard focus
+2. **Normal → Hover**: Mouse enters widget area
+3. **Hover → Active**: User presses mouse button
+4. **Active → Hover**: User releases mouse button (still in widget area)
+5. **Any state → Disabled**: Widget is disabled
+6. **Disabled → Normal**: Widget is enabled
+
+> Framework built-in system's state transition doesn't represent final widget's behavior pattern
+
+## Practical Application
+
+In actual use, you can use state prefixes to apply different styles:
+
+```rust
+let button = button("Click Me")
+    .class("px-4 py-2 rounded bg-blue-500 text-white")
+    .class("hover:bg-blue-600")
+    .class("active:bg-blue-700")
+    .class("focus:ring-2 focus:ring-blue-300")
+    .class("disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed");
+```
+
+> This is just syntax concept demonstration, class support situation please refer to actual specific documentation.
+
+## State Prefixes
+
+Flor supports using following state prefixes to define conditional styles:
+
+- `normal:`: Normal state (usually doesn't need explicit specification)
+- `hover:`: Mouse hover state
+- `focus:`: Got focus state
+- `active:`: Active state
+- `disabled:`: Disabled state
+
+This state management approach allows you to flexibly control widget's performance under different interaction states, providing good user experience.

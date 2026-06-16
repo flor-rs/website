@@ -1,0 +1,89 @@
+# 拖放
+
+`drag-drop` feature 用来启用系统拖放事件。启用后，控件可以通过事件 builder 接收拖入、悬停、离开和释放。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "drag-drop"] }
+```
+
+## 基本写法
+
+拖放是事件能力，入口在 [事件 Builder](/zh/guide/use/builder/event)。
+
+```rust
+use flor::base::platform::DropEffect;
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let drop_area = label("拖到这里")
+    .on_drag_enter(|_view_id, _key_state, _pos, formats, effect| {
+        if formats.iter().any(|format| matches!(format, flor::base::platform::DragFormat::Files(_))) {
+            *effect = DropEffect::Copy;
+        }
+    })
+    .on_drop(|_view_id, _key_state, _pos, data, effect| {
+        println!("{data:?}");
+        *effect = DropEffect::Copy;
+    });
+```
+
+事件：
+
+| 方法 | 用途 |
+| --- | --- |
+| `on_drag_enter(...)` | 拖放内容进入控件命中区域。 |
+| `on_drag_over(...)` | 拖放内容在控件上移动。 |
+| `on_drag_leave(...)` | 拖放内容离开控件。 |
+| `on_drop(...)` | 用户释放拖放内容。 |
+
+完整签名和当前派发状态见 [Handler API 的拖放事件](/zh/api/handler#拖放事件)。
+
+## 相关类型
+
+拖放事件会直接遇到这些类型：
+
+| 类型 | 用途 |
+| --- | --- |
+| `DropEffect` | 控件给系统的拖放反馈，表示当前是拒绝、复制、移动、链接等效果。 |
+| `DragFormat` | 拖入和悬停阶段可用的数据格式，用来判断当前拖进来的内容大概是什么类型。 |
+| `DragData` | `on_drop(...)` 阶段真正拿到的数据。 |
+| `KeyState` | 拖放发生时的鼠标按键和修饰键状态。 |
+| `MousePosition` | 拖放发生时的鼠标坐标。 |
+
+`on_drag_enter(...)` 和 `on_drag_over(...)` 拿到的是 `&[DragFormat]`，适合先判断能不能接收；`on_drop(...)` 拿到的是 `&DragData`，适合读取真正的数据。
+
+## DropEffect
+
+`DropEffect` 用来告诉系统当前控件准备如何处理拖放内容。取值包括：
+
+| 值 | 含义 |
+| --- | --- |
+| `DropEffect::None` | 不接受。 |
+| `DropEffect::Copy` | 接受，并表示复制。 |
+| `DropEffect::Move` | 接受，并表示移动。 |
+| `DropEffect::Link` | 接受，并表示创建链接。 |
+| `DropEffect::Scroll` | 表示拖放过程中发生滚动反馈。 |
+
+在 `on_drag_enter`、`on_drag_over` 和 `on_drop` 里可以通过 `&mut DropEffect` 修改反馈。
+
+## DragFormat 和 DragData
+
+`DragFormat` 用于进入和悬停阶段，表示当前拖放对象声明自己可以提供哪些格式：
+
+| 值 | 含义 |
+| --- | --- |
+| `DragFormat::Files(_)` | 文件拖放。 |
+| `DragFormat::Text(_)` | 文本拖放。 |
+| `DragFormat::Image(_)` | 图片拖放。 |
+| `DragFormat::Custom(_)` | 平台或应用自定义格式。 |
+
+`DragData` 用于最终释放阶段，表示真正交给控件的数据：
+
+| 值 | 含义 |
+| --- | --- |
+| `DragData::None` | 没有可用数据。 |
+| `DragData::Files(paths)` | 文件路径列表。 |
+| `DragData::Text(text)` | 文本内容。 |
+| `DragData::Image(bytes)` | 图片字节数据。 |
+| `DragData::Raw(value)` | 平台原始数据，用于扩展场景。 |

@@ -1,0 +1,42 @@
+[
+  {
+    "type": "file",
+    "name": "focus",
+    "label": "焦点"
+  },
+  {
+    "type": "file",
+    "name": "event",
+    "label": "事件"
+  },
+  {
+    "type": "file",
+    "name": "layout",
+    "label": "布局"
+  },
+  {
+    "type": "file",
+    "name": "class",
+    "label": "原子类"
+  },
+  {
+    "type": "file",
+    "name": "style",
+    "label": "样式"
+  },
+  {
+    "type": "file",
+    "name": "disable",
+    "label": "禁用"
+  },
+  {
+    "type": "file",
+    "name": "z-index",
+    "label": "层级"
+  },
+  {
+    "type": "file",
+    "name": "transform",
+    "label": "变换"
+  }
+]

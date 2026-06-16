@@ -1,0 +1,23 @@
+[
+  "index",
+  {
+    "type": "file",
+    "name": "class-syntax",
+    "label": "Class Syntax Basics"
+  },
+  {
+    "type": "file",
+    "name": "layout-class",
+    "label": "Layout Class Syntax"
+  },
+  {
+    "type": "file",
+    "name": "signal",
+    "label": "Signal API"
+  },
+  {
+    "type": "file",
+    "name": "handler",
+    "label": "Handler API"
+  }
+]

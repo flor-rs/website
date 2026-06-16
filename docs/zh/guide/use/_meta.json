@@ -1,0 +1,47 @@
+[
+  {
+    "type": "file",
+    "name": "init",
+    "label": "初始化与消息循环"
+  },
+  {
+    "type": "file",
+    "name": "window",
+    "label": "窗口创建与控制"
+  },
+  {
+    "type": "file",
+    "name": "signal",
+    "label": "跨线程的响应式信号"
+  },
+  {
+    "type": "file",
+    "name": "handler",
+    "label": "外置事件"
+  },
+  {
+    "type": "file",
+    "name": "control-state",
+    "label": "控件状态"
+  },
+  {
+    "type": "dir",
+    "name": "builder",
+    "label": "统一的 Builder 方法"
+  },
+  {
+    "type": "file",
+    "name": "resolver-layer",
+    "label": "Resolver Layer 机制"
+  },
+  {
+    "type": "file",
+    "name": "framework-dsl",
+    "label": "框架 DSL"
+  },
+  {
+    "type": "file",
+    "name": "focus",
+    "label": "焦点机制"
+  }
+]

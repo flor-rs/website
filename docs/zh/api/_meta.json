@@ -1,0 +1,23 @@
+[
+  "index",
+  {
+    "type": "file",
+    "name": "class-syntax",
+    "label": "Class 语法解析基础"
+  },
+  {
+    "type": "file",
+    "name": "layout-class",
+    "label": "Layout class 语法"
+  },
+  {
+    "type": "file",
+    "name": "signal",
+    "label": "信号 API"
+  },
+  {
+    "type": "file",
+    "name": "handler",
+    "label": "方法Handler API"
+  }
+]

@@ -1,0 +1,370 @@
+# View Trait
+
+`View` is Flor's widget implementation interface. A concrete widget provides its `ViewId` through it, and optionally overrides measurement, drawing, hit test, focus, input events, tooltip, drag-drop and state update hooks.
+
+Application side usually uses widgets provided by independent widget library (for example `flor_lys`) when composing interface, then configures with builder. Only when writing new widgets, encapsulating underlying drawing logic or implementing complex interaction, need to directly implement `View`.
+
+Widget authors should focus on `on_*` methods. Besides must-implement `view_id()`, and temporary debugging `tag()`, don't override `call_*`, `bus_*`, `visual_rect()` and other non-`on_*` dispatch methods; they are framework internal scheduling layer.
+
+## Minimal Widget
+
+Every widget must save its own `ViewId`. `view_id()` only returns this stable field, don't recreate ID in `view_id()`.
+
+```rust
+use flor::view::{View, ViewId};
+
+pub struct Spacer {
+    view_id: ViewId,
+}
+
+impl Spacer {
+    pub fn new() -> Self {
+        Self {
+            view_id: ViewId::new(),
+        }
+    }
+}
+
+impl View for Spacer {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+}
+```
+
+Default widget won't draw content, measurement result is `Size::ZERO`, hit test judges by layout rectangle. Actual widgets usually override `on_draw`; whether to override `on_measure` depends on whether this widget needs to declare its natural size to layout system.
+
+`tag()` by default returns `"View"`. It's currently mainly entry for temporarily identifying widget type during debugging, may be adjusted or deleted later, don't build business logic on `tag()`.
+
+## Drawing and Measurement
+
+Flor uses Taffy to calculate layout. Layout phase will call `on_measure`, drawing phase will call `on_draw`.
+
+> `on_measure` is not required capability for all widgets. If you want widget to support responsive layout, content adaptation, calculate natural size by text or image, need to implement measurement, let framework know how much space widget needs. If it's MFC-like pure fixed layout scenario, caller manually specifies widget width and height, can also not implement measurement, directly rely on fixed size in layout style.
+
+```rust
+use flor::base::graphics::RenderContext;
+use flor::error::Error;
+use flor::render::FlorRenderer;
+use flor::taffy::{AvailableSpace, Size, Style};
+use flor::types::Color;
+use flor::view::resolver::ComputedLayout;
+use flor::view::{ControlState, View, ViewId};
+
+pub struct ColorBlock {
+    view_id: ViewId,
+    color: Color,
+}
+
+impl ColorBlock {
+    pub fn new(color: Color) -> Self {
+        Self {
+            view_id: ViewId::new(),
+            color,
+        }
+    }
+}
+
+impl View for ColorBlock {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn on_measure(
+        &mut self,
+        known_dimensions: Size<Option<f32>>,
+        _available_space: Size<AvailableSpace>,
+        _style: &Style,
+        _control_state: ControlState,
+        _render: &mut FlorRenderer,
+    ) -> Result<Size<f32>, Error> {
+        Ok(Size {
+            width: known_dimensions.width.unwrap_or(80.0),
+            height: known_dimensions.height.unwrap_or(32.0),
+        })
+    }
+
+    fn on_draw(
+        &mut self,
+        render: &mut FlorRenderer,
+        _control_state: ControlState,
+        abs_location: (f32, f32),
+        layout: ComputedLayout,
+    ) -> Result<(), Error> {
+        let brush = render.create_solid_color_brush(self.color, None)?;
+        render.fill_quad(
+            abs_location.0,
+            abs_location.1,
+            layout.size.width,
+            layout.size.height,
+            &brush,
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+}
+```
+
+`on_measure` receives known dimensions, available space, current `Style`, current `ControlState` and renderer passed in by Taffy. Text widgets usually create text layout here to measure content; image widgets usually return needed size based on image size, available space and scaling strategy.
+
+`on_draw` receives renderer, current `ControlState`, absolute position in window coordinate system and calculated layout. Use passed-in `abs_location` and `layout.size` when drawing, don't re-derive window coordinates. Child widgets will be drawn after current widget; `on_draw_overlay` will be called after child widgets, suitable for scrollbar, floating decoration and other overlay layers.
+
+## Lifecycle and State
+
+Common lifecycle hooks include:
+
+| Method | Call Timing |
+| --- | --- |
+| `on_create` | Called in widget creation flow, external `on_create` handler also executes in same path |
+| `on_update_state` | Executes when `ViewId::update_state(Box<dyn Any>)` is called |
+| `on_frame` | Executes during frame scheduling, can return next wake-up wait time |
+| `on_child_push` | Notify parent widget after child widget joins |
+| `on_child_dispose` | Notify parent widget after child widget releases |
+
+### on_create
+
+`on_create` is called when window creation flow traverses widget tree. Framework actually goes through `call_create`: first activate pending effects mounted on this `ViewId`, then call widget internal `on_create`, finally call user's external `on_create` handler bound through builder.
+
+If widget initialization depends on window, renderer or context already entered widget tree, can put in `on_create`. Pure field initialization should be in constructor, don't wait until `on_create`.
+
+### on_update_state
+
+`on_update_state` is widget reactive update entry, usually works with signal system. Widget library creates updater: read signal in compute closure, call `ViewId::update_state(Box::new(...))` in on-change closure, finally downcast and update internal fields by widget's own `on_update_state`.
+
+`flor_lys::label` and `flor_lys::button` both use this pattern: title can be fixed value, or closure reading signal; after signal changes, update title and request redraw.
+
+```rust
+use flor::signal::create_updater;
+use flor::view::builder::StringProp;
+use flor::view::{View, ViewId};
+use std::any::Any;
+
+pub struct TitleView {
+    view_id: ViewId,
+    title: String,
+}
+
+impl TitleView {
+    pub fn new<P: StringProp>(title: P) -> Self {
+        let view_id = ViewId::new();
+        // Create reactive updater: read signal value, call update_state when changes
+        let title = create_updater(
+            move || title.make(),
+            move |value| view_id.update_state(Box::new(value)),
+        );
+
+        Self { view_id, title }
+    }
+}
+
+impl View for TitleView {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn on_update_state(&mut self, state: Box<dyn Any>) {
+        // downcast and update internal fields
+        if let Ok(title) = state.downcast::<String>() {
+            self.title = *title;
+            // Note: ViewId::update_state already requests redraw after call,
+            // so here don't need to call request_redraw() again
+        }
+    }
+}
+```
+
+If state change affects natural size, for example text change, image handle change or font style change, widget needs to clear measurement cache, and mark belonging window for re-layout when needed. Changes only affecting drawing usually just need to request redraw; `ViewId::update_state` already requests redraw after call.
+
+### on_frame
+
+`on_frame` is used for animation and periodic state progression. Default returns `Ok(None)`, indicates this widget has no next active wake-up need.
+
+Returning `Ok(Some(duration))` indicates widget hopes event loop wakes up again no later than this time. Framework traverses visible widget subtree, takes minimum value of all child widgets' returned wait times, then hands to platform wait logic. That is, a GIF widget returns next frame remaining time, input widget returns cursor blink interval, eventually will use shortest time as next wake-up target.
+
+```rust
+use flor::error::Error;
+use flor::view::{View, ViewId};
+use std::time::{Duration, Instant};
+
+pub struct CursorView {
+    view_id: ViewId,
+    focused: bool,
+    cursor_visible: bool,
+    last_blink: Instant,
+}
+
+impl View for CursorView {
+    fn view_id(&self) -> ViewId {
+        self.view_id
+    }
+
+    fn on_frame(&mut self, now: Instant) -> Result<Option<Duration>, Error> {
+        // If no focus, don't need animation, return None indicates don't need wake-up
+        if !self.focused {
+            return Ok(None);
+        }
+
+        const BLINK: Duration = Duration::from_millis(530);
+        // Check if reached blink time
+        if now.duration_since(self.last_blink) >= BLINK {
+            // Toggle cursor visible state
+            self.cursor_visible = !self.cursor_visible;
+            self.last_blink = now;
+            // Important: must request redraw after visual state change
+            self.view_id.request_redraw();
+        }
+
+        // Return next needed wake-up time
+        Ok(Some(BLINK))
+    }
+}
+```
+
+`flor_lys::image`'s GIF frame progression is same type of usage: calculate target frame based on current time, request redraw when frame changes, and return remaining time to next frame. Note that current `bus_frame` skips `display: none` and widgets not marked as visible in most recent draw.
+
+#### on_frame_policy
+
+`on_frame_policy()` by default returns `FramePolicy::VisibleOnly`, current public enum also has `FramePolicy::Always`. Current scheduling path hasn't read this return value; `bus_frame` still decides whether to call `on_frame` by `display != none` and `ViewId::visual()` visibility cache obtained from most recent draw.
+
+### on_child_push
+
+`on_child_push` is called after child widget joins current widget. It's mainly for compound widgets, for example recording how many child widgets currently, rebuilding child widget index, refreshing internal cache or syncing auxiliary data structures.
+
+`div` is also compound widget type, just it itself has no extra widget logic and drawing logic; framework already provides basic layout capability, so simple containers can not override this method.
+
+### on_child_dispose
+
+`on_child_dispose` is called after child widget releases from current widget. It corresponds to `on_child_push`, suitable for cleaning compound widget's maintained child widget count, cache, selection state or hit auxiliary structures.
+
+Both methods happen after framework completes basic parent-child relationship update. Widget authors don't need to manually write `VIEW_STORAGE.child_ids` here.
+
+## class Update
+
+After enabling `class` feature, `ViewId::update_class` will first parse state prefix, for example `hover:`, `focus:`, `active:`, `disabled:`, then hand widget style class to:
+
+```rust
+fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error>;
+```
+
+Widget can convert class name to its own style update here. Layout classes are still handled by `LayoutResolver`; `z-*` will be parsed into runtime z-index, won't enter widget style parsing.
+
+## Focus and Keyboard
+
+Focus table manages by `(focus_index, ViewId, virtual_index)`. Widget can override these methods:
+
+| Method | Purpose |
+| --- | --- |
+| `on_focus_count` | Declare how many virtual focus points this widget has, default `1` |
+| `on_virtual_focus_at` | Decide which virtual focus to focus when clicking by mouse position, default `0` |
+| `on_focus` | Called when current widget gains some virtual focus |
+| `on_blur` | Called when current widget loses some virtual focus |
+| `on_key_down` / `on_key_up` | Receive keyboard events when current widget holds focus |
+| `on_ime_start` / `on_ime_input` / `on_ime_end` | Current focus widget receives IME input flow |
+
+`on_focus_count` return value decides how many virtual focus records to generate when initializing focus table. For example returning `3` and this widget set `focus_index`, focus table will generate virtual numbers `0`, `1`, `2` for it. `on_virtual_focus_at` is used to map one click to some virtual focus.
+
+Keyboard methods return `HandleResult`. Internal `on_key_*` and external handler return values will merge: any side returns `Handled`, final is `Handled`.
+
+Complete focus mechanism see [Focus Mechanism](/en/guide/use/focus). Runtime focus API see [ViewId](/en/guide/control/view-id).
+
+## Mouse and Wheel Events
+
+Mouse events are usually dispatched to target widget after hit test:
+
+| Method | Description |
+| --- | --- |
+| `on_mouse_enter` / `on_mouse_move` / `on_mouse_leave` | Mouse enter, move, leave |
+| `on_button_down` / `on_button_up` / `on_click` / `on_double_click` | Left button down, up, click, double click |
+| `on_right_button_*` | Right button events |
+| `on_middle_button_*` | Middle button events |
+| `on_wheel_scroll_lines_changed` | Wheel line scroll event |
+
+Most events' `call_*` default implementation first executes widget internal `on_*`, then executes user's external handler bound through builder. Widget authors override `on_*`; `call_*` is framework dispatch layer, don't override in widget implementation.
+
+## Tooltip and Drag-Drop
+
+Tooltip has independent overlay mode:
+
+```rust
+fn on_tooltip_show(&mut self, key_state: KeyState, mouse_position: MousePosition) -> Result<(), Error>;
+fn on_tooltip_hide(&mut self) -> Result<(), Error>;
+```
+
+If user bound tooltip handler, framework only executes external handler; only calls widget's `on_tooltip_show` or `on_tooltip_hide` when not bound.
+
+Drag-drop methods are controlled by `drag-drop` feature:
+
+| Method | Return |
+| --- | --- |
+| `on_drag_enter` | `Result<DropEffect, Error>` |
+| `on_drag_over` | `Result<DropEffect, Error>` |
+| `on_drag_leave` | `Result<(), Error>` |
+| `on_drop` | `Result<DropEffect, Error>` |
+
+`drag_enter`, `drag_over` and `drop` external handlers can modify final effect through `&mut DropEffect`.
+
+## Hit Test
+
+Hit test is capability for irregular visual widgets, most widgets don't need to override. Default implementation already handles rectangular layout frame hit judgment.
+
+Hit test starts from window coordinates, framework uses accumulated transform to convert mouse position to each widget's local coordinates. `mouse_position` passed to following two methods is widget local coordinates:
+
+```rust
+fn on_hit_test_overlay(&self, mouse_position: MousePosition, key_state: KeyState) -> bool;
+fn on_hit_test(&self, mouse_position: MousePosition, key_state: KeyState) -> bool;
+```
+
+Each node's call order is:
+
+1. If widget not marked as visible by most recent draw, `display: none`, or mouse not in parent clipping area, skip this branch.
+2. First call current widget's `on_hit_test_overlay`. When it hits, directly returns current widget, no longer checks child nodes.
+3. If overlay didn't hit, then check child widgets by reverse drawing order. Later drawn child widgets test first, matches intuition of upper layer elements hit first.
+4. When all child widgets didn't hit, finally call current widget's `on_hit_test`.
+
+`on_hit_test_overlay` is for "overlay above child widgets" areas, for example scrollbar, drag resize handle, floating button. Default implementation judges scrollbar area based on scrollbar size in layout.
+
+`on_hit_test` is for widget main area. Default implementation judges whether point is in `(0, 0, width, height)` layout rectangle. Only need to override this method when needing circular button, irregular path, transparent area penetration, enlarged click hot area.
+
+Hit test only decides event target. Widget's visible area clipping, whether drawing happens, whether focus is obtainable, are decided by other mechanisms.
+
+## Widget State
+
+Flor internally inherits widget state mechanism, many methods receive `ControlState` parameter. Drawing and measurement both receive this state, state priority is `Disabled > Active > Focus > Hover > Normal`.
+
+Widget should use this state to read its own style resolver, or choose different drawing branches. Disabled state is not widget development method on `View` trait. Application side sets `ViewState.disable` through [Disable Builder](/en/guide/use/builder/disable); widget authors only need to correctly respond to `ControlState::Disabled`, for example drawing disabled style, ignoring input or changing hit behavior.
+
+## Visible Area
+
+After layout refresh completes, framework traverses widget tree, calls each widget's `visual_rect()` and caches to `VIEW_STORAGE.visual_rect`. Default `visual_rect()` uses layout boundary; it internally reads `on_visual_overflow()` to extend this boundary.
+
+Drawing phase reads cached `visual_rect`. If a widget's visible rectangle has no intersection with parent clipping area, framework skips this widget, doesn't call `on_draw`, also doesn't write it to `VIEW_STORAGE.visual`. If not culled, framework first writes visible mark, then dispatches `on_draw`.
+
+Widget authors don't override `visual_rect()`, should override:
+
+```rust
+fn on_visual_overflow(&self) -> VisualOverflow;
+```
+
+This method has two main purposes:
+
+- When widget draws outside layout frame, expand visible area. For example shadow, outer glow, focus ring, tooltip arrow.
+- Irregular widgets or irregular path widgets need more accurate bounds to participate in visibility judgment, avoid明明 having content in画面, but being missed visible mark due to default layout frame too small.
+
+`VisualOverflow::Uniform` is suitable for uniform distance expansion in four directions, `Custom` is suitable for shadow with directional offset, `Path` uses path bounds. It affects visibility culling and visible mark, not equal to pixel-level clipping or hit test; hit test should still be decided by `on_hit_test` / `on_hit_test_overlay` itself.
+
+## Resource Loading
+
+All `View: LoadRenderResource` can find belonging window renderer through its own `view_id()`, and create rendering resources:
+
+```rust
+use flor::render::LoadRenderResource;
+
+let handle = self.load_image(bytes)?;
+```
+
+`load_raw_image` supports raw frame data, supports `load_svg` after enabling `svg` feature. If widget hasn't associated to renderer, returns `FlorRendererError::RenderNotFound`.
+
+## VIEW_STORAGE
+
+If need more underlying data capability access, can use `VIEW_STORAGE` global variable. It stores widget tree, layout state, visibility cache, focus table and other runtime data. Most widget development scenarios don't need to directly access `VIEW_STORAGE`, prefer using methods provided by `ViewId`.

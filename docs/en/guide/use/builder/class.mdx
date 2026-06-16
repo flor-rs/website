@@ -1,0 +1,110 @@
+## Atomic Class
+
+Atomic class is a style setting method similar to Tailwind CSS, quickly configuring widget style and layout through space-separated class strings.
+
+### Enable Feature
+
+Atomic class requires enabling `class` feature:
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["class"] }
+```
+
+### Basic Usage
+
+```rust
+use flor::view::builder::ClassBuilder;
+
+view.class("flex flex-col gap-2 p-4 bg-white rounded-lg shadow-md");
+```
+
+### Class Syntax
+
+Atomic classes are separated by spaces:
+
+```text
+flex flex-col gap-2 p-4
+```
+
+Each class can have a state prefix:
+
+```text
+p-2 hover:p-4 focus:bg-blue-50 disabled:opacity-50
+```
+
+State prefix rules:
+
+| Prefix | State |
+| --- | --- |
+| No prefix | Normal |
+| `hover:` | Hover |
+| `focus:` | Focus |
+| `active:` | Active |
+| `disabled:` | Disabled |
+
+### Layout Classes
+
+Layout classes require enabling corresponding features:
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["class", "layout-flex", "layout-grid", "layout-block"] }
+```
+
+Common layout classes:
+
+```text
+flex flex-col flex-row gap-2 p-4 m-2 w-full h-auto
+```
+
+For complete layout class list, see [Layout Class Syntax](/en/api/layout-class).
+
+### Style Classes
+
+Style classes are parsed by widgets themselves:
+
+```text
+bg-white text-blue-600 rounded-lg shadow-md
+```
+
+Different widgets may support different style classes.
+
+### Arbitrary Values
+
+Many classes support bracket arbitrary value syntax:
+
+```text
+w-[320px]
+rounded-[10px]
+text-[#0f172a]
+p-[1rem]
+```
+
+### Dynamic Classes
+
+Use closure to return dynamic class string:
+
+```rust
+use flor::signal::create_signal;
+
+let is_active = create_signal(false);
+
+view.class(move || {
+    if is_active.get() {
+        "bg-blue-500 text-white"
+    } else {
+        "bg-gray-200 text-gray-800"
+    }
+});
+```
+
+### Class Priority
+
+When multiple style sources set the same property, priority is:
+
+1. Atomic class (highest)
+2. Style builder
+3. Default style (lowest)
+
+For complete class syntax, see [Class Syntax Basics](/en/api/class-syntax).

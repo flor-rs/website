@@ -1,0 +1,37 @@
+[
+  {
+    "type": "file",
+    "name": "book-index",
+    "label": "The Rambling Book"
+  },
+  {
+    "type": "file",
+    "name": "startup",
+    "label": "Quick Overview"
+  },
+  {
+    "type": "file",
+    "name": "glossary",
+    "label": "Glossary"
+  },
+  {
+    "type": "file",
+    "name": "ai",
+    "label": "AI"
+  },
+  {
+    "type": "dir",
+    "name": "use",
+    "label": "Using the Framework"
+  },
+  {
+    "type": "dir",
+    "name": "features",
+    "label": "Framework Capabilities"
+  },
+  {
+    "type": "dir",
+    "name": "control",
+    "label": "Widget Development"
+  }
+]

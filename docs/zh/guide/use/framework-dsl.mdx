@@ -1,0 +1,226 @@
+# 框架 DSL
+
+Flor 的界面代码可以当作一套普通 Rust DSL 来写：函数负责组合控件，参数负责传入属性、信号和 handler，返回值就是已经配置好的控件。
+
+这和 JSX 的使用感受有相似之处：页面不是一大段字符串模板，而是一组可以拆分、复用、传参的控件函数。区别是 Flor 不需要额外的模板语言，组合本身就是 Rust 的函数调用和链式方法。
+
+如果还不熟悉 `.class(...)`、`.layout(...)`、`.style(...)` 多次调用如何合并，先看 [Resolver Layer 机制](/zh/guide/use/resolver-layer)。
+
+## 控件树怎么表达
+
+Flor 里最常见的子控件列表写法是 `views![...]`：
+
+```rust
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let panel = div(views![
+    label("账号登录"),
+    button("发送验证码"),
+    button("登录"),
+]);
+```
+
+`views![...]` 接受一组控件表达式，并把它们转换成控件列表。它适合在控件树现场展开子节点，尤其是容器里直接写多个子控件时。
+
+如果只需要把单个控件转换成通用控件对象，可以使用 `view!(...)`：
+
+```rust
+use flor_lys::label::label;
+
+let title = flor::view!(label("账号登录"));
+```
+
+宏不是必须入口。它只是让“现场写控件树”更顺手；当你需要把单个控件按某个参数类型传出去时，直接调用 `into_view()` 或 `into_views()` 往往更清楚。
+
+## IntoView 和 IntoViews
+
+`IntoView` / `IntoViews` 这组能力用于把单个控件转换成框架更通用的控件形态。它不只用于方法返回值，也用于控件参数、模块参数、容器子节点等需要类型对齐的地方。
+
+当前公开写法里，单控件转换是 `IntoView`，多控件转换是 `IntoViews`。在封装方法时，单个控件可以返回 `impl View` 或 `impl IntoView`；多个控件可以返回 `impl IntoViews`：
+
+```rust
+use flor::view::builder::{ClassBuilder, IntoView, IntoViews};
+use flor::view::View;
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::label::label;
+
+fn title_view() -> impl View {
+    label("账号登录")
+        .class("text-xl font-bold")
+}
+
+fn title_child() -> impl IntoView {
+    label("账号登录")
+        .class("text-xl font-bold")
+}
+
+fn action_buttons() -> impl IntoViews {
+    views![
+        button("取消").class("w-full"),
+        button("确定").class("w-full"),
+    ]
+}
+```
+
+`title_view()` 返回的是一个正常控件，调用方还能继续接 `.class(...)`、`.layout(...)` 等 builder。`title_child()` 更强调“这个返回值会被拿去当作单个子控件传入”。`action_buttons()` 则表示这个函数返回一组子控件。
+
+比如 `div(...)` 这类容器接收的是子控件列表。只有一个子控件时，可以直接把它转成列表再传进去：
+
+```rust
+use flor::view::builder::{ClassBuilder, IntoView};
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let empty = div(
+    label("暂无数据")
+        .class("text-sm")
+        .into_views()
+);
+```
+
+如果某个控件或模块参数要的是一个子控件，就标注 `impl IntoView`；如果要的是一组子控件，就标注 `impl IntoViews`：
+
+```rust
+use flor::view::builder::{ClassBuilder, IntoView, IntoViews};
+use flor::view::View;
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+fn dialog(title: impl IntoView, actions: impl IntoViews) -> impl View {
+    div(views![
+        div(title.into_views()),
+        div(actions),
+    ])
+}
+
+let confirm = dialog(
+    label("删除文件").class("text-lg font-bold"),
+    button("确认").class("w-full").into_views(),
+);
+```
+
+这样写的重点是让参数和返回值表达清楚：这里需要的是普通控件、通用控件对象，还是一组可以继续交给容器的子控件。
+
+宏和转换能力可以搭配使用。`views![...]` 适合现场写多个子节点，`into_view()` / `into_views()` 适合把一个已经存在的控件表达式对齐到某个参数需要的形态：
+
+| 写法 | 用途 |
+| --- | --- |
+| `fn f() -> impl View` | 封装一个完整控件，并保留继续链式配置的能力。 |
+| `fn f() -> impl IntoView` | 封装一个准备作为子控件传递的单控件。 |
+| `fn f() -> impl IntoViews` | 封装一组准备交给容器接收的子控件。 |
+| `control.into_view()` | 把单个控件转成通用控件对象。 |
+| `control.into_views()` | 把单个控件转成只包含它的通用控件列表。 |
+| `views![a, b, c]` | 在控件树现场写子控件列表。 |
+| `view!(control)` | 在需要宏写法时，把单个控件转成通用控件对象。 |
+
+## 为什么需要宏
+
+Flor 提供 `views![...]`，是为了让现场编写子控件列表时更顺手，同时避开 Rust 元组在 UI 子节点表达上的长度问题。
+
+Floem 这类框架可以用元组表达子控件，例如 `(a, b, c)`。这种写法很自然，但在稳定 Rust 里，框架通常需要为不同长度的元组分别实现 trait。也就是说，它不是无限长度的：支持到多少个子节点，取决于框架写了多少组元组实现。
+
+`views![...]` 会直接展开成控件列表，不需要为每一种子节点数量单独实现一遍 trait，也不容易让用户在子控件数量变多时撞到元组长度上限。
+
+后续加入元组支持是可行的，做法通常是为常见长度的元组补实现，让用户可以在简单场景写 `(a, b)` 或 `(a, b, c)`。但只要稳定 Rust 还没有真正的可变参数泛型，元组支持本身仍然会有一个框架定义的上限。所以即使以后支持元组，`views![...]` 也更适合作为没有固定子节点数量时的稳定写法。
+
+## 方法组合控件
+
+最小的封装就是把一个控件的布局、样式和事件写进函数里，然后返回它：
+
+```rust
+use flor::view::builder::{ClassBuilder, EventBuilder, StringProp};
+use flor::view::handler::OnClickHandler;
+use flor::view::View;
+use flor_lys::button::button;
+
+fn primary_button<T: StringProp>(
+    text: T,
+    on_click: impl Into<OnClickHandler>,
+) -> impl View {
+    button(text)
+        .class("w-full")
+        .on_click(on_click)
+}
+```
+
+调用方只需要关心这个按钮对外暴露的参数：
+
+```rust
+let save = primary_button("保存", |view_id, _, _| {
+    println!("save from {view_id}");
+});
+```
+
+这里 `primary_button` 就像一个小型控件。它内部怎么写 class、怎么绑定事件，对调用方来说都被收进了函数边界里。
+
+## 组合成模块
+
+多个控件也可以封装成一个复合控件或业务模块。比如登录模块可以把标题、验证码按钮、登录按钮和布局一起封装起来：
+
+```rust
+use flor::view::builder::{ClassBuilder, EventBuilder};
+use flor::view::handler::OnClickHandler;
+use flor::view::View;
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+fn login_module(
+    on_login: impl Into<OnClickHandler>,
+    on_send_code: impl Into<OnClickHandler>,
+) -> impl View {
+    div(views![
+        label("账号登录").class("text-xl font-bold"),
+        button("发送验证码")
+            .class("w-full")
+            .on_click(on_send_code),
+        button("登录")
+            .class("w-full")
+            .on_click(on_login),
+    ])
+    .class("flex flex-col gap-3 p-4")
+}
+```
+
+这个函数返回的不是模板片段，而是一个完整控件。调用方可以把 handler 作为参数传进去：
+
+```rust
+let login = login_module(
+    |_, _, _| {
+        println!("login");
+    },
+    |_, _, _| {
+        println!("send code");
+    },
+);
+```
+
+如果模块里需要响应式状态，也可以把 signal 作为参数传入，让模块内部只控制自己关心的属性。比如登录按钮是否可用、验证码倒计时、面板是否显示，都可以独立拆成自己的参数，而不是把整段布局和样式写成复杂的字符串拼接。
+
+## 返回后继续配置
+
+函数返回的控件仍然可以继续使用 builder。也就是说，模块内部可以写默认布局和样式，调用方可以在外部继续补充或覆盖：
+
+```rust
+use flor::view::builder::ClassBuilder;
+
+let login = login_module(on_login, on_send_code)
+    .class("w-[360px]");
+```
+
+这里 `login_module` 内部已经写了 `flex flex-col gap-3 p-4`，调用方只补了宽度。因为 [Resolver Layer 机制](/zh/guide/use/resolver-layer) 会按层合并配置，所以外部补充不会清掉模块内部的配置；如果外部重新写了同一个属性，则以后写的为准。
+
+## 为什么适合 AI
+
+Flor 的这套 DSL 走的是常见的函数式 UI 表达路径：方法组合控件，属性、信号和 handler 作为变量传入，返回值继续参与组合。
+
+大量 AI 模型已经熟悉 React、JSX、函数式组件和声明式 UI 的组织方式，所以它们更容易迁移到 Flor 的写法上：识别控件树、补全属性、拆分模块、调整布局和事件绑定。
+
+这也是 [AI](/zh/guide/ai) 页面提到的原因：Flor 并不是为了 AI 才这样设计，但这种 DSL API 自然走到了 AI 已经训练过、也更容易理解的表达路径上。

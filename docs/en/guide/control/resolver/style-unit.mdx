@@ -1,0 +1,186 @@
+# Style Unit
+
+Flor's layout system uses `Unit` and `Length` types to represent size units. All units are converted to pixel values before being passed to layout engine.
+
+```rust
+use flor::view::resolver::{Unit, Length};
+```
+
+## Unit
+
+`Unit` is unit type marker, used to mark which unit system a number belongs to.
+
+```rust
+pub enum Unit {
+    /// Pixel, no conversion
+    #[default]
+    Px,
+
+    /// Point, uses window DPI conversion: 1pt = dpi / 72px
+    Pt,
+
+    /// Root em, uses window configured rem_px conversion
+    Rem,
+
+    /// Viewport width unit, 1vw = 1% of client area width
+    Vw,
+
+    /// Viewport height unit, 1vh = 1% of client area height
+    Vh,
+}
+```
+
+Default value is `Unit::Px`.
+
+### Px (Pixel)
+
+Pixel is absolute unit, no conversion. Layout engine directly uses pixel value.
+
+```rust
+let unit = Unit::Px;
+```
+
+### Pt (Point)
+
+Point is printing unit, uses window DPI for conversion:
+
+```
+1pt = dpi / 72px
+```
+
+Under standard 96 DPI, `1pt = 1.333px`, `12pt = 16px`.
+
+```rust
+let unit = Unit::Pt;
+```
+
+### Rem (Root em)
+
+Rem is unit relative to root element font size. Flor uses window configured `rem_px` as conversion base:
+
+```
+1rem = rem_px px
+```
+
+Default `rem_px = 16.0`, i.e. `1rem = 16px`.
+
+```rust
+let unit = Unit::Rem;
+```
+
+### Vw (Viewport Width)
+
+Vw is unit relative to viewport width:
+
+```
+1vw = viewport_width / 100 px
+```
+
+Viewport width equals window client area width. `50vw` means half of viewport width.
+
+```rust
+let unit = Unit::Vw;
+```
+
+### Vh (Viewport Height)
+
+Vh is unit relative to viewport height:
+
+```
+1vh = viewport_height / 100 px
+```
+
+Viewport height equals window client area height. `50vh` means half of viewport height.
+
+```rust
+let unit = Unit::Vh;
+```
+
+## Length
+
+`Length` is length type with number, binding number and unit together.
+
+```rust
+pub enum Length {
+    /// Pixel value
+    Px(f32),
+
+    /// Point value
+    Pt(f32),
+
+    /// Root em value
+    Rem(f32),
+
+    /// Viewport width value
+    Vw(f32),
+
+    /// Viewport height value
+    Vh(f32),
+}
+```
+
+Example:
+
+```rust
+let length = Length::Px(16.0);     // 16 pixels
+let length = Length::Rem(1.0);     // 1 rem
+let length = Length::Vw(50.0);     // 50% viewport width
+```
+
+## UnitMetrics
+
+`UnitMetrics` stores window-level unit conversion parameters, each window maintains one instance.
+
+```rust
+pub struct UnitMetrics {
+    /// 1rem corresponding pixel value, default 16.0
+    pub rem_px: AtomicF32,
+
+    /// Horizontal DPI, default 96.0
+    pub dpi_x: AtomicF32,
+
+    /// Vertical DPI, default 96.0
+    pub dpi_y: AtomicF32,
+
+    /// Viewport width (client area width, pixels)
+    pub viewport_width: AtomicF32,
+
+    /// Viewport height (client area height, pixels)
+    pub viewport_height: AtomicF32,
+}
+```
+
+### Default Values
+
+| Parameter | Default Value |
+| --- | --- |
+| `rem_px` | 16.0 |
+| `dpi_x` | 96.0 |
+| `dpi_y` | 96.0 |
+| `viewport_width` | 1024.0 |
+| `viewport_height` | 768.0 |
+
+### Update Timing
+
+These values are initialized when window is created, and updated at following times:
+
+- When window size changes, update `viewport_width` and `viewport_height`
+- When DPI changes, update `dpi_x` and `dpi_y`
+- When user modifies `WindowOption::rem_px`, update `rem_px`
+
+## Unit Conversion Formula
+
+| Unit | Formula | Example (Default Parameters) |
+| --- | --- | --- |
+| Px | No conversion | `16px` → `16px` |
+| Pt | `pt * dpi_y / 72` | `12pt` (dpi=96) → `16px` |
+| Rem | `rem * rem_px` | `1rem` (rem_px=16) → `16px` |
+| Vw | `vw * viewport_width / 100` | `50vw` (width=1024) → `512px` |
+| Vh | `vh * viewport_height / 100` | `50vh` (height=768) → `384px` |
+
+## Usage Suggestions
+
+- **Px**: For precise sizes, like border width, icon size
+- **Rem**: For font size, spacing, convenient for responsive design
+- **Pt**: For printing related scenarios, or when need to stay consistent with CSS pt
+- **Vw / Vh**: For viewport related layout, like fullscreen container, center positioning

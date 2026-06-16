@@ -1,0 +1,111 @@
+# 变换 Builder
+
+变换 Builder 用来给控件设置声明式 `Transform2D`。它影响控件自身及其子控件的绘制和命中测试，但不改变 Taffy 布局计算出来的位置和尺寸。
+
+## 基本写法
+
+导入 `TransformBuilder` 后，所有实现了 `View` 的控件都可以调用 `.transform(...)`。
+
+```rust
+use flor::types::Transform2D;
+use flor::view::builder::TransformBuilder;
+use flor_lys::label::label;
+
+let title = label("Flor")
+    .transform(Transform2D::rotation_degrees(-3.0));
+```
+
+当前签名是：
+
+```rust
+pub trait TransformBuilder {
+    fn transform(self, transform: impl TransformProp) -> Self;
+}
+```
+
+`TransformProp` 支持两种写法：
+
+| 写法 | 示例 | 适合场景 |
+| --- | --- | --- |
+| 固定 `Transform2D` | `.transform(Transform2D::translation(12.0, 0.0))` | 创建后不变的视觉偏移、旋转、缩放。 |
+| 返回 `Transform2D` 的闭包 | `.transform(move || Transform2D::rotation_degrees(angle.get()))` | 由 signal 驱动的动态变换。 |
+
+## 动态变换
+
+闭包版本会随依赖更新重新计算变换。
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::types::Transform2D;
+use flor::view::builder::TransformBuilder;
+use flor_lys::label::label;
+
+let angle = create_signal(0.0f32);
+
+let spinner = label("loading")
+    .transform(move || Transform2D::rotate_at_degrees(angle.get(), 40.0, 12.0));
+```
+
+`rotate_at_degrees(degrees, cx, cy)` 和 `scale_at(sx, sy, cx, cy)` 可以表达类似 `transform-origin` 的效果。Flor 当前没有单独的 `.origin(...)` builder。
+
+## Transform2D 常用构造
+
+| API | 作用 |
+| --- | --- |
+| `Transform2D::IDENTITY` | 单位矩阵。 |
+| `Transform2D::new(m11, m12, m21, m22, dx, dy)` | 直接构建矩阵。 |
+| `Transform2D::translation(x, y)` | 平移。 |
+| `Transform2D::scale(sx, sy)` | 缩放。 |
+| `Transform2D::rotation(radians)` | 按弧度旋转。 |
+| `Transform2D::rotation_degrees(degrees)` | 按角度旋转。 |
+| `Transform2D::skew(x_rad, y_rad)` | 按弧度倾斜。 |
+| `Transform2D::skew_degrees(x_deg, y_deg)` | 按角度倾斜。 |
+| `Transform2D::rotate_at(radians, cx, cy)` | 绕指定点旋转。 |
+| `Transform2D::rotate_at_degrees(degrees, cx, cy)` | 绕指定点按角度旋转。 |
+| `Transform2D::scale_at(sx, sy, cx, cy)` | 绕指定点缩放。 |
+
+链式组合使用 `then_*` 方法：
+
+```rust
+use flor::types::Transform2D;
+
+let transform = Transform2D::translation(16.0, 0.0)
+    .then_rotate_degrees(8.0)
+    .then_scale(1.05, 1.05);
+```
+
+组合顺序是先应用当前矩阵，再应用新的矩阵。也就是说，上面的例子会先平移，再旋转，最后缩放。
+
+## 不是 CSS transform 字符串
+
+`.transform(...)` 接收的是 `Transform2D`，不是字符串。当前没有这些 builder 方法：
+
+```rust
+// 当前不存在
+.transform("rotate(45deg)")
+.rotate(45.0)
+.scale(1.2)
+.translate(10.0, 20.0)
+.skew(10.0, 0.0)
+.origin("center")
+```
+
+对应写法应改成：
+
+```rust
+use flor::types::Transform2D;
+
+.transform(Transform2D::rotation_degrees(45.0))
+.transform(Transform2D::scale(1.2, 1.2))
+.transform(Transform2D::translation(10.0, 20.0))
+.transform(Transform2D::skew_degrees(10.0, 0.0))
+.transform(Transform2D::rotate_at_degrees(45.0, 50.0, 20.0))
+```
+
+## 机制说明
+
+`.transform(...)` 会创建一个响应式 updater。初始化时会立刻计算一次 `Transform2D`，并调用当前控件的 `ViewId::set_transform(transform)`；之后闭包依赖的 signal 更新时，会再次写入新的变换并请求重绘。
+
+运行时变换存放在 `VIEW_STORAGE.transform`。布局刷新阶段会计算累积变换，绘制阶段会 `push_transform`，命中测试会用逆矩阵把窗口坐标转换回控件局部坐标。
+
+如果矩阵不可逆，例如缩放到 `0.0`，命中测试无法把窗口坐标转换回局部坐标，这个控件分支会被跳过。动画里不要把可交互控件缩放到不可逆矩阵。

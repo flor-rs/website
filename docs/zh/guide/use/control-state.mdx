@@ -1,0 +1,119 @@
+# 控件状态
+
+Flor 框架已经实现了完整的控件状态系统，用于管理控件在不同交互场景下的状态表现。
+
+## ControlState 枚举定义
+
+```rust
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Default)]
+pub enum ControlState {
+    #[default]
+    Normal,
+    Focus,
+    Hover,
+    Active,
+    Disabled,
+}
+```
+
+## 状态模型设计
+
+Flor 框架定义了控件的五种基本状态：
+
+- **Normal**：正常状态，控件的默认状态
+- **Focus**：焦点状态，控件获得键盘焦点时
+- **Hover**：悬停状态，鼠标悬停在控件上时
+- **Active**：激活状态，控件被按下或点击时
+- **Disabled**：禁用状态，控件不可交互时
+
+## 状态分类
+
+在这些状态中，可以分为两类：
+
+### 增强态
+
+增强态是在基态基础上增加的状态，不会阻止用户交互：
+
+- **Focus**：补充状态，表示控件获得焦点
+- **Hover**：补充状态，表示鼠标悬停
+- **Active**：补充状态，表示控件被激活
+
+### 终止态
+
+终止态会阻止用户交互，控件进入不可用状态：
+
+- **Disabled**：独立状态，控件完全禁用
+
+## 状态继承关系
+
+Flor 框架实现的状态继承关系如下：
+
+```
+Normal
+  ├─ Focus
+  ├─ Hover
+  │    └─ Active
+  └─ Disabled（独立）
+```
+
+## 继承规则
+
+| 状态 | 继承自 | 原因 |
+|------|--------|------|
+| Normal | 无 | 基态，所有其他状态的基础 |
+| Focus | Normal | Focus 只是补充，不改变控件的基本行为 |
+| Hover | Normal | Hover 只是补充，提供视觉反馈 |
+| Active | Hover -> Focus -> Normal | Active 通常是 Hover 的延续，用户按下控件 |
+| Disabled | 不继承任何状态 | Disabled 应完全隔离，阻止所有交互 |
+
+### 继承链说明
+
+**Active 的继承链**：
+- 首先检查是否处于 Hover 状态
+- 如果不是 Hover，检查是否处于 Focus 状态
+- 如果都不是，继承自 Normal 状态
+
+**Disabled 的特殊处理**：
+- Disabled 状态完全独立，不继承任何其他状态的样式
+- 禁用状态下，控件显示为不可用的视觉效果
+- 所有交互事件都被忽略
+
+## 状态转换
+
+控件状态之间的转换遵循以下规则：
+
+1. **Normal → Focus**：控件获得键盘焦点
+2. **Normal → Hover**：鼠标进入控件区域
+3. **Hover → Active**：用户按下鼠标按钮
+4. **Active → Hover**：用户释放鼠标按钮（仍在控件区域内）
+5. **任意状态 → Disabled**：控件被禁用
+6. **Disabled → Normal**：控件被启用
+
+> 框架内置系统的状态转换不代表最终控件的型为模式
+
+## 实际应用
+
+在实际使用中，你可以使用状态前缀来应用不同的样式：
+
+```rust
+let button = button("点击我")
+    .class("px-4 py-2 rounded bg-blue-500 text-white")
+    .class("hover:bg-blue-600")
+    .class("active:bg-blue-700")
+    .class("focus:ring-2 focus:ring-blue-300")
+    .class("disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed");
+```
+
+> 这里只是语法概念展示，class 的支持情况请以实际具体文档为准。
+
+## 状态前缀
+
+Flor 支持使用以下状态前缀来定义条件样式：
+
+- `normal:`：正常状态（通常不需要显式指定）
+- `hover:`：鼠标悬停状态
+- `focus:`：获得焦点状态
+- `active:`：激活状态
+- `disabled:`：禁用状态
+
+这种状态管理方式让你能够灵活地控制控件在不同交互状态下的表现，提供良好的用户体验。

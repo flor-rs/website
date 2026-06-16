@@ -1,0 +1,37 @@
+[
+  {
+    "type": "file",
+    "name": "book-index",
+    "label": "唠叨之书"
+  },
+  {
+    "type": "file",
+    "name": "startup",
+    "label": "快速了解"
+  },
+  {
+    "type": "file",
+    "name": "glossary",
+    "label": "术语表"
+  },
+  {
+    "type": "file",
+    "name": "ai",
+    "label": "AI"
+  },
+  {
+    "type": "dir",
+    "name": "use",
+    "label": "使用框架"
+  },
+  {
+    "type": "dir",
+    "name": "features",
+    "label": "框架能力"
+  },
+  {
+    "type": "dir",
+    "name": "control",
+    "label": "控件开发"
+  }
+]

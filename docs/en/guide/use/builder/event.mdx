@@ -1,0 +1,177 @@
+# Event Builder
+
+Event Builder is used to attach external event handlers to widgets. It's suitable for application-side code: you don't need to write a new widget type, nor implement `View`, just chain bind events when creating widgets.
+
+Complete method list, handler types and dispatch status see [Handler API](/en/api/handler). This page only explains how to use.
+
+## Basic Writing
+
+After importing `EventBuilder`, all widgets implementing `View` can chain bind events.
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("Save")
+    .on_click(|view_id, key_state, mouse_position| {
+        println!("{view_id} clicked at {mouse_position:?}");
+    })
+    .on_mouse_enter(|view_id| {
+        println!("{view_id} entered");
+    })
+    .on_mouse_leave(|view_id| {
+        println!("{view_id} left");
+    });
+```
+
+Event callback parameters are not all the same. For example mouse click gives `ViewId`, `KeyState` and `MousePosition`; mouse enter/leave only gives `ViewId`; keyboard events give `ViewId`, `KeyCode` and modifier key state. Specific signatures check [EventBuilder API](/en/api/handler#eventbuilder) and [handler wrapper types](/en/api/handler#handler-wrapper-types).
+
+## Not Only Can Pass Closure
+
+Event Builder's parameter is not "only can pass closure". Source code's method parameter is `impl Into<On...Handler>`, and handler type implements `From<F>` for `Fn(...) + Send + Sync + 'static` satisfying signature. So you can pass closure, also can pass normal function, associated function or method item.
+
+```rust
+use flor::base::platform::{KeyState, MousePosition};
+use flor::view::builder::EventBuilder;
+use flor::view::ViewId;
+use flor_lys::label::label;
+
+fn save_clicked(view_id: ViewId, _key_state: KeyState, _pos: MousePosition) {
+    println!("save from {view_id}");
+}
+
+let save = label("Save")
+    .on_click(save_clicked);
+```
+
+Associated function can also be directly passed:
+
+```rust
+use flor::base::platform::{KeyState, MousePosition};
+use flor::view::builder::EventBuilder;
+use flor::view::ViewId;
+use flor_lys::label::label;
+
+struct Actions;
+
+impl Actions {
+    fn open(view_id: ViewId, _key_state: KeyState, _pos: MousePosition) {
+        println!("open from {view_id}");
+    }
+}
+
+let open = label("Open")
+    .on_click(Actions::open);
+```
+
+Closure is suitable for writing small amount of logic in place; function and method are suitable for reusing logic, or splitting page code more clearly. As long as signature matches, passing either is okay.
+
+## Ignore Unused Parameters
+
+Event parameters will be fixedly passed in according to handler type. Unused parameters can use `_` or `_name` to ignore.
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("Delete")
+    .on_click(|view_id, _, _| {
+        println!("delete {view_id}");
+    });
+```
+
+Don't reduce parameter count yourself. For example `on_click` needs mouse handler, callback should receive three parameters; just write unused ones as `_`.
+
+## Mouse Events
+
+Mouse events are usually used for click, press, release, move, enter and leave.
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let item = label("Clickable")
+    .on_button_down(|view_id, _, pos| {
+        println!("down {view_id}: {pos:?}");
+    })
+    .on_button_up(|view_id, _, pos| {
+        println!("up {view_id}: {pos:?}");
+    })
+    .on_click(|view_id, _, _| {
+        println!("click {view_id}");
+    });
+```
+
+Regular mouse hit events' `MousePosition` is target widget's local coordinates. Complete mouse event list see [Handler API's current dispatch status](/en/api/handler#current-dispatch-status).
+
+## Keyboard Events
+
+Keyboard events are dispatched to current focus widget. To let widget receive widget-level `on_key_down` / `on_key_up`, first let it enter focus table; focus mechanism see [Focus Mechanism](/en/guide/use/focus).
+
+```rust
+use flor::base::platform::{HandleResult, KeyCode};
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let editor = label("Press Ctrl+S to save")
+    .focus_index(0)
+    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+        if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
+            println!("save");
+            HandleResult::Handled
+        } else {
+            HandleResult::Default
+        }
+    });
+```
+
+Keyboard handler returns `HandleResult`. Returning `Handled` means this key is already handled; returning `Default` means交给 default handling. Keyboard handler's complete signature see [Keyboard Events API](/en/api/handler#keyboard-events).
+
+## Focus and Lifecycle Events
+
+`on_focus` / `on_blur` are triggered by focus manager, second parameter is virtual focus number.
+
+```rust
+use flor::view::builder::{EventBuilder, FocusIndexBuilder};
+use flor_lys::label::label;
+
+let input = label("Name")
+    .focus_index(0)
+    .on_focus(|view_id, virtual_index| {
+        println!("focus {view_id}: {virtual_index}");
+    })
+    .on_blur(|view_id, virtual_index| {
+        println!("blur {view_id}: {virtual_index}");
+    });
+```
+
+`on_create` is suitable for doing one-time runtime initialization after widget tree creation, for example pushing focus scope for popup layer:
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let dialog = label("Popup Layer")
+    .on_create(|view_id| {
+        view_id.push_focus_scope();
+    });
+```
+
+Lifecycle类 handler's aliases and parameters see [View and Lifecycle Events API](/en/api/handler#view-and-lifecycle-events).
+
+## Feature-gated Events
+
+Drag-drop and theme change这类 events are controlled by feature. After enabling corresponding feature, related builder methods are available. Complete explanation see [Handler API](/en/api/handler).
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+#[cfg(feature = "drag-drop")]
+let drop_area = label("Drop Here")
+    .on_drop(|view_id, _key_state, _mouse_position, data, _effect| {
+        println!("drop on {view_id}: {data:?}");
+    });
+```
+
+If you're unsure whether an event is already connected to dispatch path, first see [Current Dispatch Status](/en/api/handler#current-dispatch-status). Tutorial page won't repeatedly maintain each method's complete status table.

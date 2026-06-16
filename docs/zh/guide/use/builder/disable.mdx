@@ -1,0 +1,71 @@
+# 禁用 Builder
+
+禁用 Builder 用来把控件切到 `ControlState::Disabled`。它是应用侧配置控件状态的 builder，不是自定义控件作者需要在 `View` trait 里重写的方法。
+
+当前公开接口是：
+
+```rust
+pub trait DisableBuilder {
+    fn disable<F>(self, f: F) -> Self
+    where
+        F: Fn() -> bool + 'static;
+}
+```
+
+## 基本写法
+
+导入 `DisableBuilder` 后，所有实现了 `View` 的控件都可以调用 `.disable(...)`。
+
+```rust
+use flor::view::builder::DisableBuilder;
+use flor_lys::button::button;
+
+let save = button("保存").disable(|| true);
+```
+
+闭包返回 `true` 表示禁用，返回 `false` 表示正常。固定禁用可以直接写 `|| true`，但更常见的是从信号里读取状态。
+
+## 响应式禁用
+
+`.disable(...)` 会创建一个响应式 updater。闭包里读取的信号变化后，框架会重新计算禁用状态。
+
+```rust
+use flor::signal::{create_signal, Read, Write};
+use flor::view::builder::DisableBuilder;
+use flor_lys::button::button;
+
+let saving = create_signal(false);
+
+let save = button("保存")
+    .disable(move || saving.get());
+
+// 开始保存时禁用按钮。
+saving.set(true);
+```
+
+需要组合多个条件时，直接在闭包里写业务判断：
+
+```rust
+use flor::signal::{create_signal, Read};
+use flor::view::builder::DisableBuilder;
+use flor_lys::button::button;
+
+let saving = create_signal(false);
+let form_valid = create_signal(false);
+
+let submit = button("提交")
+    .disable(move || saving.get() || !form_valid.get());
+```
+
+## 机制说明
+
+`.disable(...)` 内部会：
+
+1. 读取当前控件的 `ViewId`。
+2. 用 `create_updater_with_id` 创建一个 updater。
+3. 在 updater 变化时写入 `ViewState.disable`。
+4. 把 effect id 挂到当前 `ViewId` 的 pending effect 列表里，控件创建流程会激活它。
+
+禁用状态参与 `ControlState` 计算，且优先级最高：`Disabled > Active > Focus > Hover > Normal`。控件作者在 `on_draw`、`on_measure` 或事件处理中读取 `ControlState::Disabled`，决定禁用状态下的视觉和交互行为。
+
+禁用不会自动移除焦点表条目，也不会自动取消当前焦点。需要运行时改变焦点能力时，使用 [ViewId](/zh/guide/control/view-id) 的焦点 API。

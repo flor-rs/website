@@ -1,0 +1,157 @@
+# class 语法解析基础
+
+本页是 `.class(...)` 字符串的通用解析规则。使用教程见 [原子类支持](/zh/guide/use/builder/class)，layout class 的完整清单见 [layout class 语法](/zh/api/layout-class)。
+
+## 入口
+
+```rust
+use flor::view::builder::ClassBuilder;
+
+view.class("flex gap-2 p-4");
+```
+
+`ClassBuilder` 需要启用 `class` feature。公开入口只有一个：
+
+```rust
+pub trait ClassBuilder<M> {
+    fn class(self, class_str: M) -> Self;
+}
+```
+
+`M` 需要实现 `ClassProp`。当前常用输入包括：
+
+| 输入 | 示例 |
+| --- | --- |
+| `&'static str` | `.class("flex gap-2")` |
+| `String` | `.class(format!("w-[{}px]", width))` |
+| `Fn() -> String + 'static` | `.class(move || if open.get() { "block".into() } else { "hidden".into() })` |
+
+闭包形式会被响应式更新器重新求值，适合 class 字符串依赖 signal 的场景。
+
+## 拆分规则
+
+传入的字符串会按空白字符拆分：
+
+```text
+"flex flex-col gap-2 p-4"
+```
+
+会被拆成：
+
+```text
+flex
+flex-col
+gap-2
+p-4
+```
+
+不存在引号转义或保留空格的 class token。如果值里需要特殊字符，用方括号任意值语法。
+
+## 状态前缀
+
+class token 可以带一个状态前缀：
+
+| 前缀 | 状态 |
+| --- | --- |
+| 无前缀 | Normal |
+| `hover:` | Hover |
+| `focus:` | Focus |
+| `active:` | Active |
+| `disabled:` | Disabled |
+
+示例：
+
+```rust
+.class("p-2 hover:p-4 focus:bg-blue-50 disabled:opacity-50")
+```
+
+状态前缀只解析一层。`md:hover:p-4`、`hover:focus:p-4` 这类组合前缀当前不会按多个状态解析。
+
+## 任意值语法
+
+很多 class 支持方括号写法：
+
+```text
+w-[320px]
+rounded-[10px]
+text-[#0f172a]
+aspect-[16/9]
+```
+
+解析时会去掉最外层 `[` 和 `]`，再按对应属性的值语法解析。方括号不是所有 class 都支持，具体以对应 class 文档或控件实现为准。
+
+## 长度值
+
+layout class 和部分控件样式 class 会用统一的长度解析。
+
+| 写法 | 示例 | 说明 |
+| --- | --- | --- |
+| 裸数字 | `4` | 按 Tailwind 间距习惯解析，`4` 等于 `1rem`。默认 `1rem = 16px` 时，`4` 等于 `16px`。 |
+| `px` | `12px` | 像素。 |
+| `rem` | `1.5rem` | 使用当前窗口的 `WindowOption::rem_px`，默认 `16.0`。 |
+| `pt` | `12pt` | 使用当前窗口 DPI，公式是 `1pt = dpi / 72 px`。 |
+| `vw` | `50vw` | 当前窗口客户区宽度的百分比。 |
+| `vh` | `50vh` | 当前窗口客户区高度的百分比。 |
+| 百分比 | `50%` | 按百分比解析。 |
+| 分数 | `1/2` | 转成百分比。 |
+
+示例：
+
+```text
+p-4
+w-1/2
+h-[240px]
+mt-[1rem]
+max-h-[80vh]
+```
+
+## 关键字
+
+不同属性支持的关键字不同。常见关键字包括：
+
+| 关键字 | 常见用途 |
+| --- | --- |
+| `auto` | `Dimension::Auto` 或 auto margin。 |
+| `full` | 100%。 |
+| `screen` | 当前窗口客户区宽度或高度。 |
+| `fit` / `min` / `max` | 当前尺寸解析中会作为 auto 处理。 |
+
+布局 class 对这些关键字的支持范围，见 [layout class 语法](/zh/api/layout-class)。控件样式 class 对这些关键字的支持范围，见对应控件库对具体控件的文档。
+
+## 颜色值
+
+控件样式类如果使用 Flor 的共享颜色解析，通常支持：
+
+| 写法 | 示例 |
+| --- | --- |
+| 关键字 | `transparent`、`black`、`white` |
+| 十六进制 | `#fff`、`#ffffff` |
+| 方括号十六进制 | `[#0f172a]` |
+| Tailwind 色板 | `slate-900`、`blue-600`、`red-500` |
+
+颜色解析是否用于某个 class，由具体控件决定。例如 `text-blue-600`、`bg-slate-100` 是否生效，要看当前控件是否实现了对应样式 class。
+
+## 共享样式辅助语法
+
+部分控件会复用这些解析函数：
+
+| 语法 | 示例 | 说明 |
+| --- | --- | --- |
+| `rounded` | `rounded` | 4px 圆角。 |
+| `rounded-*` | `rounded-none`、`rounded-sm`、`rounded-md`、`rounded-lg`、`rounded-xl`、`rounded-2xl`、`rounded-3xl`、`rounded-full` | 常用圆角档位。 |
+| `rounded-[Npx]` | `rounded-[10px]` | 自定义圆角。 |
+| `font-*` | `font-thin`、`font-light`、`font-normal`、`font-medium`、`font-semibold`、`font-bold`、`font-black` | 字重。 |
+
+这些是共享解析能力，不代表所有控件都自动支持。控件必须在自己的 class 更新逻辑中使用这些解析结果。
+
+## 处理路径
+
+`.class(...)` 传入的类名会经过这些用户可见的处理：
+
+1. 按空白拆分成多个 class token。
+2. `z-*` 会作为控件层级处理。
+3. 其他 token 会按状态前缀拆成状态和实际 class 名。
+4. 实际 class 名会交给控件的样式解析逻辑。
+5. 同一批 class 也会交给 layout class 解析逻辑。
+
+layout class 的具体支持范围见 [layout class 语法](/zh/api/layout-class)。控件样式 class 的具体支持范围由控件文档或控件源码决定。

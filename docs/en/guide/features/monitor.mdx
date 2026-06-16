@@ -1,0 +1,44 @@
+# Monitor Information
+
+`monitor` feature is used to enable monitor query capability. It适合 do window initial positioning, multi-screen adaptation, read work area size, adjust custom logic by monitor DPI等.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "monitor"] }
+```
+
+## Basic Usage
+
+Monitor entry is in platform layer. When using import `MonitorApi` trait.
+
+```rust
+use flor::base::platform::MonitorApi;
+use flor::platform::Monitor;
+
+let monitors = Monitor::enumerate_monitors()?;
+
+for monitor in monitors {
+    println!(
+        "{} primary={} scale={} dpi=({}, {})",
+        monitor.name(),
+        monitor.is_primary(),
+        monitor.scale_factor(),
+        monitor.dpi_x(),
+        monitor.dpi_y(),
+    );
+}
+```
+
+## Query Entry
+
+| Method | Purpose |
+| --- | --- |
+| `Monitor::enumerate_monitors()` | Enumerate all monitors. |
+| `Monitor::monitor_from_point(x, y)` | Query monitor at某 screen coordinate. |
+| `Monitor::monitor_from_window_id(window_id)` | Query monitor where window is located. |
+| `monitor.rect()` | Monitor complete area. |
+| `monitor.work_area()` | Available work area, usually will exclude taskbar等 system areas. |
+| `monitor.scale_factor()` | Scale factor, usually derived from DPI. |
+| `monitor.dpi_x()` / `monitor.dpi_y()` | Current monitor DPI. |
+
+If just want layout units to update with window DPI, usually don't need to manually query monitor; see [High DPI](/en/guide/features/hi-dpi).

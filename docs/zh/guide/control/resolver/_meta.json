@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "style-unit",
+    "label": "样式单位"
+  },
+  {
+    "type": "file",
+    "name": "resolver-struct",
+    "label": "Resolver 结构体"
+  },
+  {
+    "type": "file",
+    "name": "resolver-derive",
+    "label": "Resolver 派生宏"
+  },
+  {
+    "type": "file",
+    "name": "class-resolve",
+    "label": "class 共享解析方法"
+  }
+]

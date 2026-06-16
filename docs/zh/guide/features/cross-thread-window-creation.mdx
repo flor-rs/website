@@ -1,0 +1,73 @@
+# 跨线程窗口创建
+
+`cross-thread-window-creation` feature 允许在事件循环线程之外调用 `WindowOption::open(...)` 创建窗口。
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "cross-thread-window-creation"] }
+```
+
+## 什么时候需要启用
+
+判断规则很简单：如果应用需要“在任意地方创建窗口”的能力，就一定要启用 `cross-thread-window-creation` feature。
+
+典型场景包括在业务线程、后台任务、异步回调或非事件循环线程中调用 `WindowOption::open(...)`。这种调用路径一旦存在，就不要依赖人工保证“刚好在正确线程创建窗口”。
+
+未启用该 feature 时，`WindowOption::open(...)` 默认会在当前线程直接创建窗口。这适合所有窗口都由事件循环线程或主线程创建的简单程序。
+
+但如果在没有启用该 feature 的情况下，从非事件循环线程创建窗口，框架可能会遇到平台 UI 线程限制、事件循环同步问题、消息队列等待问题，甚至出现卡死或死锁。因此，只要程序存在跨线程创建窗口的需求，就应该显式开启该 feature。
+
+## 基本行为
+
+启用 `cross-thread-window-creation` 后，`WindowOption::open(...)` 仍然使用同一个 API。
+
+当调用发生在事件循环线程之外时，Flor 会把窗口创建请求投递到事件循环线程处理，并让当前线程等待创建结果。这样可以确保窗口真正由正确的 UI 线程创建，同时让调用方仍然获得同步的创建结果。
+
+```rust
+use flor::windows::WindowOption;
+use flor_lys::label::label;
+
+std::thread::spawn(|| {
+    WindowOption::default()
+        .open(|_window| label("from worker thread"))
+        .expect("create window");
+});
+```
+
+## 使用条件
+
+跨线程窗口创建依赖事件循环线程处理创建队列，因此需要满足以下条件之一：
+
+1. 事件循环已经在运行；
+2. 创建请求已经在事件循环进入前排队，之后会由事件循环线程处理。
+
+常见用法是：主线程初始化 Flor，并进入 `FlorGui.event_loop()?`；业务线程在需要时调用 `WindowOption::open(...)` 请求创建新窗口。
+
+```rust
+use flor::FlorGui;
+
+FlorGui.init()?;
+
+// 业务线程中可以请求创建窗口
+// ...
+
+FlorGui.event_loop()?;
+```
+
+## 为什么这是一个 feature
+
+`cross-thread-window-creation` 会引入额外的跨线程请求队列、同步等待和相关调度逻辑，因此会带来一定的性能和体积开销。
+
+对于稍微大一些的 GUI 程序来说，这部分开销通常可以忽略不计。但对于非常小的工具类程序，尤其是所有窗口都只在主线程创建的程序，这些额外逻辑并不是必需的，体积和启动路径上的额外代码也更值得控制。
+
+因此 Flor 将它设计为可选 feature：需要跨线程创建窗口能力的程序可以显式开启；不需要该能力的小型程序则可以避免引入额外开销。
+
+## 平台设计原因
+
+很多平台都对 UI 线程有要求，其中 macOS 明确要求 UI 相关操作运行在主线程。这也是 Flor 采用这套设计的重要原因：框架需要让应用代码可以从业务位置发起创建窗口的请求，同时仍然保证真正的窗口创建发生在正确的 UI / 事件循环线程。
+
+为了兼容这类平台限制，并避免在不同线程直接创建窗口导致未定义行为、消息循环卡住或死锁问题，Flor 将跨线程窗口创建设计为“请求投递到事件循环线程，由事件循环线程实际创建窗口”的模式。
+
+也就是说，`cross-thread-window-creation` 并不是让任意线程真正直接创建窗口，而是让任意线程都可以安全地请求创建窗口，最终窗口仍然由正确的 UI / 事件循环线程完成创建。
+
+如果你的应用所有窗口都在主线程或事件循环线程创建，不需要启用这个 feature。

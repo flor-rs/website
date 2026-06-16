@@ -1,0 +1,42 @@
+[
+  {
+    "type": "file",
+    "name": "focus",
+    "label": "Focus Builder"
+  },
+  {
+    "type": "file",
+    "name": "event",
+    "label": "Event Builder"
+  },
+  {
+    "type": "file",
+    "name": "layout",
+    "label": "Layout Builder"
+  },
+  {
+    "type": "file",
+    "name": "class",
+    "label": "Atomic Class"
+  },
+  {
+    "type": "file",
+    "name": "style",
+    "label": "Style Builder"
+  },
+  {
+    "type": "file",
+    "name": "disable",
+    "label": "Disable Builder"
+  },
+  {
+    "type": "file",
+    "name": "z-index",
+    "label": "Z-Index Builder"
+  },
+  {
+    "type": "file",
+    "name": "transform",
+    "label": "Transform Builder"
+  }
+]

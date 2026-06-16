@@ -1,0 +1,108 @@
+> Translator's note: If you can read Chinese, please prioritize reading the Chinese version; this is the author's original manuscript, other language versions are primarily translated by AI models and are for reference only.
+
+## Crate Structure
+
+Graphics backend and platform layer are at the same dependency level, not depending on each other, selected by core framework via feature.
+
+| Crate | Purpose | Dependency Level |
+| --- | --- | --- |
+| `flor-base` | Shared types, platform abstraction and graphics abstraction. | L0 Base |
+| `flor-macros` | Procedural macros (`style!`, `color!`, etc.). | L0 Base |
+| `flor-graphics-direct2d` | Direct2D rendering backend. | L1 Render Backend |
+| `flor-graphics-opengl` | OpenGL rendering backend. | L1 Render Backend |
+| `flor-graphics-tiny-skia` | Tiny Skia rendering backend. | L1 Render Backend |
+| `flor-platform-windows` | Windows platform implementation. | L1 Platform Layer |
+| `flor` | Core framework: view system, signals, event loop, window management. | L2 Framework |
+
+Lower layer numbers mean more foundational; crates at the same layer don't depend on each other.
+
+## Framework Features
+
+`flor` doesn't enable any features by default. Applications usually need at least one rendering backend, then enable layout, atomic class, platform capabilities etc. as needed.
+
+```toml
+[dependencies]
+flor = { version = "0.1.0", features = ["direct2d", "tiny-skia", "layout-flex", "class"] }
+```
+
+Below are features exposed to users by `flor` crate. Widget libraries may forward some of these features, but framework-side names are as listed here. For detailed usage of platform capabilities, see [Framework Capabilities](/en/guide/features/overview).
+
+### Rendering Backends
+
+Rendering backends submit Flor's drawing commands to specific graphics implementations. Applications need to enable at least one backend; if both GPU backend and `tiny-skia` are enabled, it will continue trying CPU backend after GPU initialization fails.
+
+| Feature | Backend Type | Backend Crate | Supported Platforms | Purpose |
+| --- | --- | --- | --- | --- |
+| `direct2d` | GPU | `flor-graphics-direct2d` | Windows | Windows native Direct2D backend. |
+| `opengl` | GPU | `flor-graphics-opengl` | Windows (current implementation) | OpenGL backend. |
+| `tiny-skia` | CPU | `flor-graphics-tiny-skia` | Windows (current implementation) | Pure CPU rasterization backend, can be fallback when GPU backend initialization fails. |
+
+`direct2d` and `opengl` both enable `gpu-render-backend` marker; choose one GPU backend in the same build. `tiny-skia` enables `cpu-render-backend` marker, can be enabled together with a GPU backend.
+
+### Drawing Capabilities
+
+These features are not backends themselves, but add drawing or resource capabilities on enabled backends.
+
+| Feature | Supported Backends | Supported Platforms | Purpose |
+| --- | --- | --- | --- |
+| `svg` | `direct2d` / `opengl` / `tiny-skia` | Follows enabled rendering backend; current implementation is Windows | Enables SVG resource and SVG drawing support. |
+| `memory-font` | `direct2d` / `opengl` / `tiny-skia` | Follows enabled rendering backend; current implementation is Windows | Enables loading fonts from memory. |
+
+Basic shapes, text, images and other conventional drawing capabilities are provided by rendering backends, no need to additionally enable `svg` or `memory-font`.
+
+### Layout and Class
+
+| Feature | Purpose |
+| --- | --- |
+| `layout-flex` | Enables Flex layout related capabilities. |
+| `layout-grid` | Enables Grid layout related capabilities. |
+| `layout-block` | Enables Block layout related capabilities. |
+| `class` | Enables `.class(...)` atomic class capability. |
+
+For complete layout builder methods, see [Layout Builder](/en/guide/use/builder/layout). For class usage, see [Atomic Class](/en/guide/use/builder/class). For layout class syntax list, see [Layout Class Syntax](/en/api/layout-class).
+
+### Platform Capabilities
+
+| Feature | Purpose |
+| --- | --- |
+| `clipboard` | Clipboard capability. |
+| `drag-drop` | Drag-drop events and related handlers. |
+| `tray` | System tray capability. |
+| `theme-change` | System theme change related capability. |
+| `monitor` | Monitor information related capability. |
+| `hi-dpi` | High DPI related capability. |
+| `cross-thread-window-creation` | Allows cross-thread window creation. |
+
+For feature-controlled parts in event builder and handlers, see [Event Builder](/en/guide/use/builder/event) and [Handler API](/en/api/handler).
+
+### Development and Internal Selection
+
+| Feature | Purpose |
+| --- | --- |
+| `signal-tracing` | Preserves signal labels in release mode for subsequent tracing and debugging. |
+| `cpu-render-backend` | CPU rendering chain marker, usually indirectly enabled by `tiny-skia`. |
+| `gpu-render-backend` | GPU rendering chain marker, usually indirectly enabled by `direct2d` or `opengl`. |
+| `no-check-backend` | Skips "must enable at least one rendering backend" compile check, usually only for special middle layers or test scenarios. |
+
+Applications usually directly enable `direct2d`, `opengl` or `tiny-skia`. Don't manually enable only `cpu-render-backend` / `gpu-render-backend` internal markers.
+
+## Introduction to Each Part
+
+### What you need to know for simply using the framework
+
+By default you'll use it with a widget library, prioritize these contents:
+
+- Initialization and message loop
+- [Window Creation and Control](/en/guide/use/window)
+- Cross-thread reactive signal system
+- Use class or declarative builder to configure layout and style
+- Enable framework features as needed
+
+### What you need to know for developing widgets
+
+By default you already know how to use Flor to write applications, then continue with these contents:
+
+- `View trait`: Trait that new widgets need to implement. Framework manages lifecycle, events, drawing etc. flows.
+- `ViewId`: Widget's unique ID, also provides runtime access entries for parent-child relationships, focus, scroll, visibility state, redraw etc.
+- `Resolver` attribute macro and struct: Generates widget-state property template code through enums.
+- `Render API`: Framework provides a drawing API sufficient for most widget drawing; when advanced capabilities are needed, get corresponding handle by backend for custom processing.

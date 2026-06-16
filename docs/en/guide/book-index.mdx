@@ -1,0 +1,87 @@
+# The Rambling Book
+
+> Translator's note: If you can read Chinese, please prioritize reading the Chinese version; this is the author's original manuscript, other language versions are primarily translated by AI models and are for reference only.
+
+## The Beginning
+
+Back when I was learning Rust, I had many things I wanted to build, but I was always a giant in thought and a dwarf in action. One day, I impulsively started exploring Rust GUI frameworks, preparing for my future development.
+
+At that time, I felt like there weren't any frameworks with high usability. I tried one of them, but due to API issues, I couldn't even implement a simple interface switching feature.
+
+There weren't any frameworks that satisfied me at that time, for a simple reason: every framework had its own problems. Aside from the ecosystem, I believed the biggest issue with existing frameworks was "design".
+
+Among them, I found the `miniquad` source code and was inspired by it. Eventually, I decided to develop my own Rust GUI framework.
+
+## Thinking, Design, Philosophy, and Results
+
+I developed this framework slowly. From being not very skilled at first, always getting stuck by the compiler, to now it being my most proficient language.
+
+`flor` has entered the verification phase with major versions, and the current version is the fifth. This version is very different from my initial thoughts, much like how Rust's creator seeing the current Rust would find it completely different from what they imagined. But unlike them, I'm very satisfied with the current design.
+
+The current design blends traditional widget-based development with various design elements from modern web development. Its performance completely matches my vision of a Rust GUI framework that wants everything, wants more, and wants even more.
+
+### Initial Design Goals
+
+- High performance
+- Low compiled size
+- High API consistency
+- Multi-window support
+- No forced context binding
+
+> I believe the problems with existing Rust GUI frameworks:
+> - No multi-window support
+> - Forced context binding
+> - Cross-scope data access
+> - Widget/component extension
+>
+> The biggest problem is forced context binding, so every version of my design worked toward this direction. However, earlier versions leaned more toward a window-class approach similar to C#.
+
+But after repeated design verification failures, one day I saw the `floem` framework and was deeply inspired by its declarative layout, signal system, and widget management philosophy, entering the fifth version (current version) design. After entering the fifth version design, the API consistency I wanted naturally emerged, and extensibility performed very well, gradually leading to where we are now.
+
+### Current Design Results and Performance:
+
+- High performance
+- Low compiled size
+- High API consistency
+- Self-written platform support
+- No forced context binding
+- Cross-thread interactive reactive signal system [1]
+- Handle exposure, supports native library usage
+- Multi-window support, can create windows in any thread, any location
+- Retained mode based on immediate mode [2], naturally supports high-performance animation. Each window can independently set refresh mode.
+- Declarative UI DSL
+- Atomic class style parsing support [3]
+- Terminal application experience is simple, complexity absorbed by framework/widget authors.
+- Supports async task scheduling and UI updates, no manual UI thread switching needed
+
+[1]: `Signal` supports cross-thread, implements `Copy` trait, can be moved anywhere, assigned anywhere, without performance issues from waiting for UI thread like in C#.  
+[2]: `Retained mode` is implemented based on `immediate mode`. For widgets needing high refresh, `retained mode` still has `immediate mode` performance.  
+[3]: Provides `atomic class names` during construction. `Atomic class names` are parsed separately by the framework's layout system and corresponding widgets in order, efficiently and controllably building application layout.  
+
+> If you also agree with these design philosophies, you will definitely like this framework.
+
+These design characteristics together bring some hidden benefits, such as:
+
+- Naturally supports collaboration
+- Programmers from both traditional development and modern web development can find familiar concepts in it.
+- Supports async task scheduling and UI updates, no manual thread switching needed
+
+### Design Philosophy / Guiding Principles Summary
+
+- Prioritize API usage experience. First think about what API design would be best to use, then think about how to implement it. Usage experience, learning difficulty, and maintenance cost are the framework's core requirements.
+- Using macros in layout DSL is a GUI nightmare. It has major limitations, not to mention IDE hint support may not be good. It's like a black box. When you write something wrong, error messages may not be clear. Greatly increases framework learning difficulty and maintenance difficulty, so in this framework, macros are used only when necessary, with very low priority.
+- Performance and compiled size are original requirements, so feature capabilities are split as much as possible to ensure framework's minimal capabilities.
+
+### About the Future
+
+Q: Will there be another iteration version, or GUI frameworks with other approaches?
+
+A: In my view, all solutions appear to answer some question. This framework's main problem to solve is breaking away from forced context binding. So whether there will be another depends on whether new unanswered questions appear.
+
+Other frameworks mostly exist for some specific use, some paradigm, or some type of application. This framework exists because no framework exists without being for a specific purpose.
+
+So, this framework's vision is: Let `Flor` become one of the default options developers think of and are willing to try in the Rust ecosystem. When developers need native desktop applications, hope it naturally enters the candidate list, just like Qt for C++, WPF for C#.
+
+As the name of this framework implies:
+
+> *Flowers bloom one after another, each showing its own brilliance.*
