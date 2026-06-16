@@ -12,24 +12,153 @@
         "link": "/guide/startup"
       },
       {
-        "text": "Glossary",
-        "link": "/guide/glossary"
-      },
-      {
         "text": "AI",
         "link": "/guide/ai"
       },
       {
         "text": "Using the Framework",
-        "link": "/guide/use/"
+        "items": [
+          {
+            "text": "Initialization",
+            "link": "/guide/use/init"
+          },
+          {
+            "text": "Cross-thread Reactive Signals",
+            "link": "/guide/use/signal"
+          },
+          {
+            "text": "Window Creation and Control",
+            "link": "/guide/use/window"
+          },
+          {
+            "text": "External Events",
+            "link": "/guide/use/handler"
+          },
+          {
+            "text": "Control State",
+            "link": "/guide/use/control-state"
+          },
+          {
+            "text": "Unified Builder Methods",
+            "items": [
+              {
+                "text": "Focus",
+                "link": "/guide/use/builder/focus"
+              },
+              {
+                "text": "Events",
+                "link": "/guide/use/builder/event"
+              },
+              {
+                "text": "Layout",
+                "link": "/guide/use/builder/layout"
+              },
+              {
+                "text": "Atomic Classes",
+                "link": "/guide/use/builder/class"
+              },
+              {
+                "text": "Style",
+                "link": "/guide/use/builder/style"
+              },
+              {
+                "text": "Z-Index",
+                "link": "/guide/use/builder/z-index"
+              },
+              {
+                "text": "Transform",
+                "link": "/guide/use/builder/transform"
+              }
+            ]
+          },
+          {
+            "text": "Resolver Layer Mechanism",
+            "link": "/guide/use/resolver-layer"
+          },
+          {
+            "text": "Framework DSL",
+            "link": "/guide/use/framework-dsl"
+          },
+          {
+            "text": "Focus Mechanism",
+            "link": "/guide/use/focus"
+          }
+        ]
       },
       {
         "text": "Framework Capabilities",
-        "link": "/guide/features/"
+        "items": [
+          {
+            "text": "Feature Overview",
+            "link": "/guide/features/overview"
+          },
+          {
+            "text": "Clipboard",
+            "link": "/guide/features/clipboard"
+          },
+          {
+            "text": "Drag-Drop",
+            "link": "/guide/features/drag-drop"
+          },
+          {
+            "text": "System Tray",
+            "link": "/guide/features/tray"
+          },
+          {
+            "text": "Theme Change",
+            "link": "/guide/features/theme-change"
+          },
+          {
+            "text": "Monitor Info",
+            "link": "/guide/features/monitor"
+          },
+          {
+            "text": "Hi-DPI",
+            "link": "/guide/features/hi-dpi"
+          },
+          {
+            "text": "Cross-thread Window Creation",
+            "link": "/guide/features/cross-thread-window-creation"
+          }
+        ]
       },
       {
         "text": "Widget Development",
-        "link": "/guide/control/"
+        "items": [
+          {
+            "text": "ViewId",
+            "link": "/guide/control/view-id"
+          },
+          {
+            "text": "View Trait",
+            "link": "/guide/control/view-trait"
+          },
+          {
+            "text": "Resolver",
+            "items": [
+              {
+                "text": "Style Units",
+                "link": "/guide/control/resolver/style-unit"
+              },
+              {
+                "text": "Resolver Struct",
+                "link": "/guide/control/resolver/resolver-struct"
+              },
+              {
+                "text": "Resolver Derive Macro",
+                "link": "/guide/control/resolver/resolver-derive"
+              },
+              {
+                "text": "Class Shared Parsing Methods",
+                "link": "/guide/control/resolver/class-resolve"
+              }
+            ]
+          },
+          {
+            "text": "Developing Widgets from Scratch",
+            "link": "/guide/control/create-widget"
+          }
+        ]
       }
     ]
   },
