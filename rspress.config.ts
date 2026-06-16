@@ -2,8 +2,10 @@ import { defineConfig } from '@rspress/core';
 import {pluginOpenGraph} from 'rsbuild-plugin-open-graph';
 
 const siteUrl = 'https://flor-rs.github.io/website/';
+const base = '/website/';
 
 export default defineConfig({
+    base,
     plugins: [pluginOpenGraph({
         // Note, title is page-specific
         title: 'Flor - A high-performance, signal-driven native GUI framework for Rust. Modern, ergonomic, widget-based, and built with a small footprint for general-purpose native desktop apps.',
@@ -42,10 +44,13 @@ export default defineConfig({
             },
         ],
     },
-    // builderConfig: {
+    builderConfig: {
+        output: {
+            assetPrefix: base,
+        },
     //     performance: {
     //         buildCache: false,
     //     },
-    // },
+    },
     llms: true,
 });
