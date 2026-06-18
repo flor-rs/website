@@ -23,26 +23,37 @@ use flor_lys::label::label;
 let count = create_signal(0);
 
 let click_count = count;
-let add = button("Add One").on_click(move |_, _, _| {
+let add = button("Add One").on_click(move || {
     click_count.update(|value| *value += 1);
 });
 
 let text = label(move || format!("count: {}", count.get()));
 ```
 
-`on_click`'s closure has three parameters:
+The complete `on_click` closure has three parameters:
 
 ```rust
 |view_id, key_state, mouse_position| { ... }
 ```
 
-Initially can write all as `_` like above, only focus on business logic. When need to know event source, mouse position or modifier key state, then补 parameter names back.
+At first you can write a no-argument closure like above and focus only on the business logic. When you need the event source, mouse position, or modifier key state, add the parameters back. Mouse events also support receiving only `ViewId`, or omitting `ViewId` and receiving only `KeyState` and `MousePosition`.
+
+If different examples show different parameter counts, that does not mean the event has multiple dispatch rules. It is the same handler conversion mechanism. Event Builder converts the closure, function, or method item you pass into the target handler. Handlers with extra event parameters usually support four writing forms:
+
+| Form | Example | Use Case |
+| --- | --- | --- |
+| Full arguments | `\|view_id, key_state, mouse_position\| { ... }` | You need the full event context |
+| No arguments | `\|\| { ... }` | You only need to trigger business logic |
+| `ViewId` only | `\|view_id\| { ... }` | You only care which widget triggered the event |
+| Without `ViewId` | `\|key_state, mouse_position\| { ... }` | You only care about event data |
+
+Events whose complete parameter list is only `ViewId`, such as `on_mouse_enter` and `on_create`, only support the "full arguments" and "no arguments" forms. For the underlying mechanism, see [Mechanism Explanation](#mechanism-explanation). For complete signatures, see [Handler API](/en/api/handler#intoeventhandler).
 
 Event closures usually write signal, send command, open window, request redraw, or post business message to own task system. Just remember one thing: event closures will execute in GUI event processing flow, don't do long blocking work inside.
 
 ## Any View Can Attach Events
 
-`EventBuilder` is implemented for all types implementing `View`, so events are not button exclusive. A label, a container, a custom widget, as long as is `View`, can attach external events:
+`EventBuilder` is implemented for all types implementing `ViewIdentity`, so events are not button exclusive. A label, a container, or a custom widget can attach external events as long as it can provide a `ViewId`. A function returning `impl IntoView` can also continue chaining event bindings:
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -53,7 +64,7 @@ let title = label("Click Title").on_click(|view_id, _, _| {
 });
 ```
 
-First parameter is always `ViewId` triggering event. It can be used to access widget state, request redraw, set focus, capture mouse etc. Normal business code不一定 needs it, but when you want to associate event with specific widget, it's most direct entry.
+The first complete argument is the `ViewId` of the widget that triggered the event. It can be used to access widget state, request redraw, set focus, capture mouse, and similar operations. Normal business code may not need it and can omit it directly; when you need to associate an event with a specific widget, it is the most direct entry point.
 
 ## Mouse Position and Button State
 
@@ -115,7 +126,7 @@ use flor_lys::label::label;
 
 let shortcut_area = label("Press Ctrl+S")
     .focus_index(1)
-    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+    .on_key_down(|code, is_alt, is_ctrl, is_shift| {
         if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
             println!("save");
             HandleResult::Handled
@@ -125,7 +136,7 @@ let shortcut_area = label("Press Ctrl+S")
     });
 ```
 
-`on_key_down` and `on_key_up` both need to return `HandleResult`:
+`on_key_down` and `on_key_up` both need to return `HandleResult`. Keyboard events can use the full arguments `|view_id, code, is_alt, is_ctrl, is_shift|`, or omit `ViewId` as above:
 
 | Return Value | Meaning |
 | --- | --- |
@@ -146,11 +157,11 @@ use flor_lys::label::label;
 
 let focusable = label("Focusable Area")
     .focus_index(1)
-    .on_focus(|view_id, virtual_index| {
-        println!("focus {view_id}, virtual index: {virtual_index}");
+    .on_focus(|virtual_index| {
+        println!("focus virtual index: {virtual_index}");
     })
-    .on_blur(|view_id, virtual_index| {
-        println!("blur {view_id}, virtual index: {virtual_index}");
+    .on_blur(|| {
+        println!("blur");
     });
 ```
 
@@ -179,14 +190,14 @@ use flor::view::builder::EventBuilder;
 use flor_lys::label::label;
 
 let wheel_area = label("Scroll Here").on_wheel_settings_changed(
-    |view_id, axis, delta, key_state, pos| {
+    |axis, delta, key_state, pos| {
         match axis {
             ScrollAxis::Vertical => println!("vertical wheel: {delta}"),
             ScrollAxis::Horizontal => println!("horizontal wheel: {delta}"),
         }
 
         if key_state.control_is_down {
-            println!("ctrl wheel on {view_id}: {}, {}", pos.x, pos.y);
+            println!("ctrl wheel: {}, {}", pos.x, pos.y);
         }
     },
 );
@@ -209,7 +220,7 @@ use flor::view::builder::EventBuilder;
 use flor_lys::label::label;
 
 let drop_area = label("Drag Files Here")
-    .on_drag_enter(|_, _, _, formats, effect| {
+    .on_drag_enter(|_, _, formats, effect| {
         let accepts_files = formats
             .iter()
             .any(|format| matches!(format, DragFormat::Files(_)));
@@ -218,7 +229,7 @@ let drop_area = label("Drag Files Here")
             *effect = DropEffect::Copy;
         }
     })
-    .on_drop(|_, _, _, data, effect| {
+    .on_drop(|_, _, data, effect| {
         if let DragData::Files(files) = data {
             for file in files {
                 println!("drop file: {}", file.display());
@@ -252,7 +263,9 @@ view.on_click(|view_id, key_state, pos| {
 })
 ```
 
-`EventBuilder` will take out this view's handler storage, convert closure into corresponding handler wrapper type, and write to `ViewHandler`'s `on_click_handler` slot. Method returns original `self`, so it can naturally continue chain calling.
+`EventBuilder` will take out this view's handler storage, convert the closure through `IntoEventHandler` into the corresponding handler wrapper type, and write to `ViewHandler`'s `on_click_handler` slot. Method returns original `self`, so it can naturally continue chain calling.
+
+This conversion is trait-driven: the full-argument signature first goes through the handler wrapper type's `From<F>` implementation, while simplified signatures are handled by other `IntoEventHandler<T, Args>` implementations that fill in the omitted arguments. `Args` is a marker type used for Rust trait inference. You usually do not write it when calling event methods; you only need to carry this generic parameter out when you write your own function that accepts an event handler. See [Framework DSL: Method Composing Widgets](/en/guide/use/framework-dsl#method-composing-widgets) for the forwarding pattern.
 
 After event enters Flor from platform layer, approximate path is:
 

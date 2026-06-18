@@ -1,0 +1,143 @@
+# View 转换 API
+
+本页用于查询 `flor::view` 中和控件身份、通用控件对象、子控件序列相关的公开 API。使用教程见 [框架 DSL](/zh/guide/use/framework-dsl)。
+
+## 导入
+
+```rust
+use flor::view::{
+    IntoView, IntoViewIter, View, ViewBox, ViewIdentity,
+};
+use flor::view::builder::ViewBuilder;
+```
+
+## `ViewBox`
+
+`ViewBox` 是框架内部和容器 API 常用的通用控件对象：
+
+```rust
+pub type ViewBox = Box<dyn View + Send + Sync + 'static>;
+```
+
+`view!(...)` 宏会把单个控件转换成 `ViewBox`，`views![...]` 宏会生成 `Vec<ViewBox>`。
+
+## `ViewIdentity`
+
+`ViewIdentity` 是 builder 读取控件身份的抽象：
+
+```rust
+pub trait ViewIdentity {
+    fn identity(&self) -> ViewId;
+}
+```
+
+当前 `View` 和 `ViewBox` 都实现了 `ViewIdentity`。因此基于 `ViewIdentity` 的 builder 不只可以用于具体控件，也可以用于通用控件对象，以及返回类型写成 `impl IntoView` 的控件封装。
+
+常用的 `ClassBuilder`、`LayoutBuilder`、`EventBuilder`、`FocusIndexBuilder`、`DisableBuilder`、`TransformBuilder`、`ZIndexBuilder` 都通过 `ViewIdentity` 获取目标控件。
+
+## `IntoView`
+
+`IntoView` 用于把单个控件转换成 `ViewBox`：
+
+```rust
+pub trait IntoView: ViewIdentity + Send + Sync + 'static {
+    fn into_view(self) -> ViewBox;
+}
+```
+
+实现情况：
+
+| 类型 | 行为 |
+| --- | --- |
+| `T: View + Send + Sync + 'static` | 包装成 `Box<dyn View + Send + Sync + 'static>` |
+| `ViewBox` | 原样返回 |
+
+`IntoView` 继承 `ViewIdentity`。如果一个函数返回 `impl IntoView`，调用方仍然可以继续接常用 builder：
+
+```rust
+use flor::view::IntoView;
+use flor::view::builder::{ClassBuilder, EventBuilder};
+use flor_lys::button::button;
+
+fn action(text: &'static str) -> impl IntoView {
+    button(text).class("px-2")
+}
+
+let save = action("保存")
+    .class("font-bold")
+    .on_click(|| {
+        println!("save");
+    });
+```
+
+## `IntoViewIter`
+
+`IntoViewIter` 用于把一个值转换成 `ViewBox` 迭代器，主要给容器子节点、窗口根视图和 `ViewBuilder::views` 使用：
+
+```rust
+pub trait IntoViewIter {
+    type Iter: Iterator<Item = ViewBox>;
+
+    fn into_view_iter(self) -> Self::Iter;
+}
+```
+
+实现情况：
+
+| 类型 | 行为 |
+| --- | --- |
+| `T: IntoView` | 转成只包含一个 `ViewBox` 的迭代器 |
+| `Vec<ViewBox>` | 直接消费这个列表 |
+
+这意味着接收 `impl IntoViewIter` 的 API 可以同时接收单个控件和 `views![...]` 生成的控件列表：
+
+```rust
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let single = div(label("只有一个子控件"));
+
+let multiple = div(views![
+    label("标题"),
+    button("确认"),
+]);
+```
+
+## `ViewBuilder`
+
+`ViewBuilder` 给已有控件追加子控件：
+
+```rust
+pub trait ViewBuilder {
+    fn views(self, views: impl IntoViewIter) -> Self;
+
+    fn push_view(self, view: impl IntoView) -> Self;
+}
+```
+
+`views(...)` 接收子控件序列；因为单个控件也实现 `IntoViewIter`，所以它可以接收单个控件或 `views![...]` 列表。`push_view(...)` 用于追加一个子控件。
+
+```rust
+use flor::view::builder::ViewBuilder;
+use flor::views;
+use flor_lys::button::button;
+use flor_lys::div::div;
+use flor_lys::label::label;
+
+let panel = div(views![label("标题")])
+    .push_view(button("保存"))
+    .views(label("补充说明"));
+```
+
+如果是在创建容器时传入初始子控件，优先使用容器构造函数或 `views![...]`。`ViewBuilder` 更适合在已经拿到父控件值以后追加子控件。
+
+## 宏
+
+| 宏 | 返回值 | 作用 |
+| --- | --- | --- |
+| `view!(control)` | `ViewBox` | 把单个控件装箱成通用控件对象 |
+| `views![a, b, c]` | `Vec<ViewBox>` | 构造多个子控件组成的列表 |
+
+宏内部调用的是 `IntoView::into_view(...)`，因此每个元素都需要实现 `IntoView`。

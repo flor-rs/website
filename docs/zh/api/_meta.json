@@ -17,6 +17,11 @@
   },
   {
     "type": "file",
+    "name": "view",
+    "label": "View 转换 API"
+  },
+  {
+    "type": "file",
     "name": "handler",
     "label": "方法Handler API"
   }

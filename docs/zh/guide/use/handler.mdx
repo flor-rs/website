@@ -23,26 +23,37 @@ use flor_lys::label::label;
 let count = create_signal(0);
 
 let click_count = count;
-let add = button("加一").on_click(move |_, _, _| {
+let add = button("加一").on_click(move || {
     click_count.update(|value| *value += 1);
 });
 
 let text = label(move || format!("count: {}", count.get()));
 ```
 
-`on_click` 的闭包有三个参数：
+`on_click` 的完整闭包有三个参数：
 
 ```rust
 |view_id, key_state, mouse_position| { ... }
 ```
 
-刚开始可以像上面一样全部写成 `_`，只关注业务逻辑。需要知道事件来源、鼠标位置或修饰键状态时，再把参数名字补回来。
+刚开始可以像上面一样写成无参数闭包，只关注业务逻辑。需要知道事件来源、鼠标位置或修饰键状态时，再把参数名字补回来。鼠标事件也支持只接收 `ViewId`，或者省略 `ViewId` 只接收 `KeyState` 和 `MousePosition`。
+
+如果你在不同示例里看到参数数量不一样，不是因为事件有多套派发规则，而是同一个 handler 转换机制在起作用。事件 Builder 会根据闭包、函数或方法项的签名，把它转换成目标 handler。带有额外事件参数的 handler 通常支持四种填写形态：
+
+| 形态 | 示例 | 适用场景 |
+| --- | --- | --- |
+| 完整参数 | `\|view_id, key_state, mouse_position\| { ... }` | 需要全部事件上下文 |
+| 无参数 | `\|\| { ... }` | 只触发业务动作 |
+| 只接收 `ViewId` | `\|view_id\| { ... }` | 只关心哪个控件触发 |
+| 省略 `ViewId` | `\|key_state, mouse_position\| { ... }` | 只关心事件数据 |
+
+只有 `ViewId` 一个完整参数的事件，例如 `on_mouse_enter`、`on_create`，只有“完整参数”和“无参数”两种有效形态。底层机制见本页的 [机制说明](#机制说明)，完整签名见 [Handler API](/zh/api/handler#intoeventhandler)。
 
 事件闭包通常会写 signal、发命令、打开窗口、请求重绘，或者把业务消息投递到自己的任务系统里。只要记住一件事：事件闭包会在 GUI 事件处理流程中执行，不要在里面做长时间阻塞的工作。
 
 ## 任何 View 都可以挂事件
 
-`EventBuilder` 是给所有实现了 `View` 的类型实现的，所以事件不是按钮专属。一个标签、一个容器、一个自定义控件，只要是 `View`，都可以挂外置事件：
+`EventBuilder` 是给所有实现了 `ViewIdentity` 的类型实现的，所以事件不是按钮专属。一个标签、一个容器、一个自定义控件，只要能提供 `ViewId`，都可以挂外置事件。函数返回的 `impl IntoView` 也可以继续链式绑定事件：
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -53,7 +64,7 @@ let title = label("点击标题").on_click(|view_id, _, _| {
 });
 ```
 
-第一个参数永远是触发事件的 `ViewId`。它可以用来访问控件状态、请求重绘、设置焦点、捕获鼠标等。普通业务代码不一定需要它，但当你要把事件和具体控件关联起来时，它就是最直接的入口。
+完整参数里的第一个参数是触发事件的 `ViewId`。它可以用来访问控件状态、请求重绘、设置焦点、捕获鼠标等。普通业务代码不一定需要它，可以直接省略；当你要把事件和具体控件关联起来时，它就是最直接的入口。
 
 ## 鼠标位置和按键状态
 
@@ -115,7 +126,7 @@ use flor_lys::label::label;
 
 let shortcut_area = label("按 Ctrl+S")
     .focus_index(1)
-    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+    .on_key_down(|code, is_alt, is_ctrl, is_shift| {
         if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
             println!("save");
             HandleResult::Handled
@@ -125,7 +136,7 @@ let shortcut_area = label("按 Ctrl+S")
     });
 ```
 
-`on_key_down` 和 `on_key_up` 都要返回 `HandleResult`：
+`on_key_down` 和 `on_key_up` 都要返回 `HandleResult`。键盘事件可以使用完整参数 `|view_id, code, is_alt, is_ctrl, is_shift|`，也可以像上面一样省略 `ViewId`：
 
 | 返回值 | 含义 |
 | --- | --- |
@@ -146,11 +157,11 @@ use flor_lys::label::label;
 
 let focusable = label("可聚焦区域")
     .focus_index(1)
-    .on_focus(|view_id, virtual_index| {
-        println!("focus {view_id}, virtual index: {virtual_index}");
+    .on_focus(|virtual_index| {
+        println!("focus virtual index: {virtual_index}");
     })
-    .on_blur(|view_id, virtual_index| {
-        println!("blur {view_id}, virtual index: {virtual_index}");
+    .on_blur(|| {
+        println!("blur");
     });
 ```
 
@@ -179,14 +190,14 @@ use flor::view::builder::EventBuilder;
 use flor_lys::label::label;
 
 let wheel_area = label("滚动这里").on_wheel_settings_changed(
-    |view_id, axis, delta, key_state, pos| {
+    |axis, delta, key_state, pos| {
         match axis {
             ScrollAxis::Vertical => println!("vertical wheel: {delta}"),
             ScrollAxis::Horizontal => println!("horizontal wheel: {delta}"),
         }
 
         if key_state.control_is_down {
-            println!("ctrl wheel on {view_id}: {}, {}", pos.x, pos.y);
+            println!("ctrl wheel: {}, {}", pos.x, pos.y);
         }
     },
 );
@@ -209,7 +220,7 @@ use flor::view::builder::EventBuilder;
 use flor_lys::label::label;
 
 let drop_area = label("拖文件到这里")
-    .on_drag_enter(|_, _, _, formats, effect| {
+    .on_drag_enter(|_, _, formats, effect| {
         let accepts_files = formats
             .iter()
             .any(|format| matches!(format, DragFormat::Files(_)));
@@ -218,7 +229,7 @@ let drop_area = label("拖文件到这里")
             *effect = DropEffect::Copy;
         }
     })
-    .on_drop(|_, _, _, data, effect| {
+    .on_drop(|_, _, data, effect| {
         if let DragData::Files(files) = data {
             for file in files {
                 println!("drop file: {}", file.display());
@@ -252,7 +263,9 @@ view.on_click(|view_id, key_state, pos| {
 })
 ```
 
-`EventBuilder` 会取出这个 view 的 handler 存储，把闭包转换成对应的 handler 包装类型，并写入 `ViewHandler` 的 `on_click_handler` 槽位。方法返回原来的 `self`，所以它可以自然地继续链式调用。
+`EventBuilder` 会取出这个 view 的 handler 存储，把闭包通过 `IntoEventHandler` 转换成对应的 handler 包装类型，并写入 `ViewHandler` 的 `on_click_handler` 槽位。方法返回原来的 `self`，所以它可以自然地继续链式调用。
+
+这个转换是 trait 驱动的：完整参数签名先走 handler 包装类型的 `From<F>` 实现，简化签名再由 `IntoEventHandler<T, Args>` 的其它实现补齐被省略的参数。`Args` 是给 Rust 做 trait 推导的标记类型，调用事件方法时一般不需要手写；当你自己封装一个接收事件 handler 的函数时，才需要把这个泛型带出去，写法见 [框架 DSL 的方法组合控件](/zh/guide/use/framework-dsl#方法组合控件)。
 
 事件从平台层进入 Flor 后，大致路径是：
 

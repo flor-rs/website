@@ -17,6 +17,11 @@
   },
   {
     "type": "file",
+    "name": "view",
+    "label": "View Conversion API"
+  },
+  {
+    "type": "file",
     "name": "handler",
     "label": "Handler API"
   }

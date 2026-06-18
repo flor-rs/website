@@ -6,7 +6,7 @@
 
 ## 基本写法
 
-导入 `EventBuilder` 后，所有实现了 `View` 的控件都可以链式绑定事件。
+导入 `EventBuilder` 后，所有实现了 `ViewIdentity` 的值都可以链式绑定事件。普通控件、`ViewBox`，以及函数返回的 `impl IntoView` 都满足这个条件。
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -24,11 +24,13 @@ let item = label("保存")
     });
 ```
 
-事件回调的参数不是每种都一样。比如鼠标点击会给 `ViewId`、`KeyState` 和 `MousePosition`；鼠标进入、离开只给 `ViewId`；键盘事件会给 `ViewId`、`KeyCode` 和修饰键状态。具体签名查 [EventBuilder API](/zh/api/handler#eventbuilder) 和 [handler 包装类型](/zh/api/handler#handler-包装类型)。
+事件回调的完整参数不是每种都一样。比如鼠标点击的完整参数是 `ViewId`、`KeyState` 和 `MousePosition`；鼠标进入、离开的完整参数是 `ViewId`；键盘事件的完整参数是 `ViewId`、`KeyCode` 和修饰键状态。现在多数 handler 也支持省略不用的参数，具体签名查 [EventBuilder API](/zh/api/handler#eventbuilder) 和 [handler 包装类型](/zh/api/handler#handler-包装类型)。
+
+看到示例里的参数数量不一样时，按“同一个 handler 的不同转换形态”理解。事件 Builder 会把你传入的闭包、函数或方法项转换成对应 handler；带有额外事件参数的 handler 通常支持完整参数、无参数、只接收 `ViewId`、省略 `ViewId` 四种形态。机制细节见 [外置事件的机制说明](/zh/guide/use/handler#机制说明) 和 [IntoEventHandler API](/zh/api/handler#intoeventhandler)。
 
 ## 不只可以传闭包
 
-事件 Builder 的参数不是“只能传闭包”。源码里的方法参数是 `impl Into<On...Handler>`，而 handler 类型对满足签名的 `Fn(...) + Send + Sync + 'static` 实现了 `From<F>`。所以你可以传闭包，也可以传普通函数、关联函数或方法项。
+事件 Builder 的参数不是“只能传闭包”。源码里的方法参数是 `impl IntoEventHandler<On...Handler, Args>`，handler 类型保留了完整签名的 `From<F>` 转换，同时额外支持无参数、只接收 `ViewId`、或省略 `ViewId` 的常见写法。所以你可以传闭包，也可以传普通函数、关联函数或方法项。
 
 ```rust
 use flor::base::platform::{KeyState, MousePosition};
@@ -64,11 +66,61 @@ let open = label("打开")
     .on_click(Actions::open);
 ```
 
-闭包适合就地写少量逻辑；函数和方法适合复用逻辑，或者把页面代码拆得更清楚。只要签名匹配，传哪一种都可以。
+泛型函数或泛型关联函数也可以传，但要让 Rust 得到一个已经确定类型的函数项：
 
-## 忽略不用的参数
+```rust
+use flor::view::builder::EventBuilder;
+use flor::view::ViewId;
+use flor_lys::label::label;
 
-事件参数会按 handler 类型固定传入。用不到的参数可以用 `_` 或 `_name` 忽略。
+fn trace_click<const SLOT: usize>(view_id: ViewId) {
+    println!("slot {SLOT}: {view_id}");
+}
+
+let debug = label("调试")
+    .on_click(trace_click::<1>);
+```
+
+带实例状态的方法通常用闭包捕获实例，再在闭包里调用方法；这样被传给 builder 的仍然是一个满足目标签名的 `Fn`。
+
+闭包适合就地写少量逻辑；函数、方法项和泛型函数适合复用逻辑，或者把页面代码拆得更清楚。只要最终签名匹配，传哪一种都可以。
+
+## `Args` 泛型怎么理解
+
+事件方法长这样：
+
+```rust
+fn on_click<Args>(
+    self,
+    handler: impl IntoEventHandler<OnClickHandler, Args>,
+) -> Self;
+```
+
+这里的 `Args` 不是事件运行时传入的参数，也不需要用户手写。它只是给 Rust 做 trait 推导的标记：完整参数、无参数、只接收 `ViewId`、省略 `ViewId` 会分别匹配到不同的 `IntoEventHandler` 实现。
+
+只有在你把事件 handler 当成自己函数的参数继续转发时，才需要把这个泛型写出来：
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor::view::handler::{IntoEventHandler, OnClickHandler};
+use flor::view::View;
+use flor_lys::button::button;
+
+fn action_button<Args>(
+    text: &'static str,
+    on_click: impl IntoEventHandler<OnClickHandler, Args>,
+) -> impl View {
+    button(text).on_click(on_click)
+}
+
+let save = action_button("保存", || {
+    println!("save");
+});
+```
+
+## 省略不用的参数
+
+如果只是不使用某些参数，可以继续用 `_` 或 `_name` 忽略：
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -80,7 +132,26 @@ let item = label("删除")
     });
 ```
 
-不要自己减少参数数量。比如 `on_click` 需要的是鼠标 handler，回调应接收三个参数；只是不使用其中某些参数时，把它们写成 `_`。
+现在也可以直接减少参数数量。常见支持形态有三类：
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let save = label("保存").on_click(|| {
+    println!("save");
+});
+
+let source = label("来源").on_click(|view_id| {
+    println!("save from {view_id}");
+});
+
+let inspect = label("检查").on_click(|key_state, _pos| {
+    println!("ctrl: {}", key_state.control_is_down);
+});
+```
+
+完整参数写法仍然可用；省略参数适合业务逻辑不关心控件 ID、鼠标位置或按键状态的场景。
 
 ## 鼠标事件
 
@@ -115,7 +186,7 @@ use flor_lys::label::label;
 
 let editor = label("按 Ctrl+S 保存")
     .focus_index(0)
-    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+    .on_key_down(|code, is_alt, is_ctrl, is_shift| {
         if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
             println!("save");
             HandleResult::Handled
@@ -125,7 +196,7 @@ let editor = label("按 Ctrl+S 保存")
     });
 ```
 
-键盘 handler 返回 `HandleResult`。返回 `Handled` 表示这个按键已经处理；返回 `Default` 表示交给默认处理。键盘 handler 的完整签名见 [键盘事件 API](/zh/api/handler#键盘事件)。
+键盘 handler 返回 `HandleResult`。返回 `Handled` 表示这个按键已经处理；返回 `Default` 表示交给默认处理。键盘 handler 可以使用完整参数，也可以省略 `ViewId`；完整签名见 [键盘事件 API](/zh/api/handler#键盘事件)。
 
 ## 焦点和生命周期事件
 
@@ -137,11 +208,11 @@ use flor_lys::label::label;
 
 let input = label("名称")
     .focus_index(0)
-    .on_focus(|view_id, virtual_index| {
-        println!("focus {view_id}: {virtual_index}");
+    .on_focus(|virtual_index| {
+        println!("focus index: {virtual_index}");
     })
-    .on_blur(|view_id, virtual_index| {
-        println!("blur {view_id}: {virtual_index}");
+    .on_blur(|| {
+        println!("blur");
     });
 ```
 
@@ -169,8 +240,8 @@ use flor_lys::label::label;
 
 #[cfg(feature = "drag-drop")]
 let drop_area = label("拖放到这里")
-    .on_drop(|view_id, _key_state, _mouse_position, data, _effect| {
-        println!("drop on {view_id}: {data:?}");
+    .on_drop(|_key_state, _mouse_position, data, _effect| {
+        println!("drop: {data:?}");
     });
 ```
 

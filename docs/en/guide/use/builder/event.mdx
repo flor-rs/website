@@ -6,7 +6,7 @@ Complete method list, handler types and dispatch status see [Handler API](/en/ap
 
 ## Basic Writing
 
-After importing `EventBuilder`, all widgets implementing `View` can chain bind events.
+After importing `EventBuilder`, all values implementing `ViewIdentity` can chain bind events. Normal widgets, `ViewBox`, and values returned as `impl IntoView` all satisfy this condition.
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -24,11 +24,13 @@ let item = label("Save")
     });
 ```
 
-Event callback parameters are not all the same. For example mouse click gives `ViewId`, `KeyState` and `MousePosition`; mouse enter/leave only gives `ViewId`; keyboard events give `ViewId`, `KeyCode` and modifier key state. Specific signatures check [EventBuilder API](/en/api/handler#eventbuilder) and [handler wrapper types](/en/api/handler#handler-wrapper-types).
+Complete event callback parameters are not all the same. For example, the complete mouse click parameters are `ViewId`, `KeyState`, and `MousePosition`; mouse enter/leave use `ViewId`; keyboard events use `ViewId`, `KeyCode`, and modifier key state. Most handlers now also support omitting unused parameters. Specific signatures are listed in [EventBuilder API](/en/api/handler#eventbuilder) and [handler wrapper types](/en/api/handler#handler-wrapper-types).
+
+When examples show different parameter counts, read them as different conversion forms for the same handler. Event Builder converts the closure, function, or method item you pass into the corresponding handler. Handlers with extra event parameters usually support four forms: full arguments, no arguments, `ViewId` only, and without `ViewId`. Mechanism details are in [External Events: Mechanism Explanation](/en/guide/use/handler#mechanism-explanation) and [IntoEventHandler API](/en/api/handler#intoeventhandler).
 
 ## Not Only Can Pass Closure
 
-Event Builder's parameter is not "only can pass closure". Source code's method parameter is `impl Into<On...Handler>`, and handler type implements `From<F>` for `Fn(...) + Send + Sync + 'static` satisfying signature. So you can pass closure, also can pass normal function, associated function or method item.
+Event Builder's parameter is not "only can pass closure". Source code's method parameter is `impl IntoEventHandler<On...Handler, Args>`. Handler types keep the full-signature `From<F>` conversion, and additionally support common forms such as no arguments, `ViewId` only, or without `ViewId`. So you can pass a closure, a normal function, an associated function, or a method item.
 
 ```rust
 use flor::base::platform::{KeyState, MousePosition};
@@ -64,11 +66,61 @@ let open = label("Open")
     .on_click(Actions::open);
 ```
 
-Closure is suitable for writing small amount of logic in place; function and method are suitable for reusing logic, or splitting page code more clearly. As long as signature matches, passing either is okay.
+Generic functions or generic associated functions can also be passed, but Rust must see a function item whose type has already been determined:
 
-## Ignore Unused Parameters
+```rust
+use flor::view::builder::EventBuilder;
+use flor::view::ViewId;
+use flor_lys::label::label;
 
-Event parameters will be fixedly passed in according to handler type. Unused parameters can use `_` or `_name` to ignore.
+fn trace_click<const SLOT: usize>(view_id: ViewId) {
+    println!("slot {SLOT}: {view_id}");
+}
+
+let debug = label("Debug")
+    .on_click(trace_click::<1>);
+```
+
+Methods with instance state are usually called through a closure that captures the instance; the value passed to the builder is still an `Fn` matching the target signature.
+
+Closures are suitable for writing a small amount of logic in place. Functions, method items, and generic functions are useful for reusing logic or splitting page code more clearly. As long as the final signature matches, all of these forms are valid.
+
+## Understanding the `Args` Generic
+
+An event method looks like this:
+
+```rust
+fn on_click<Args>(
+    self,
+    handler: impl IntoEventHandler<OnClickHandler, Args>,
+) -> Self;
+```
+
+`Args` is not a runtime event parameter, and users do not need to write it when calling the method. It is only a marker for Rust trait inference: full arguments, no arguments, `ViewId` only, and without `ViewId` match different `IntoEventHandler` implementations.
+
+You only need to write this generic parameter when you accept an event handler in your own function and forward it:
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor::view::handler::{IntoEventHandler, OnClickHandler};
+use flor::view::View;
+use flor_lys::button::button;
+
+fn action_button<Args>(
+    text: &'static str,
+    on_click: impl IntoEventHandler<OnClickHandler, Args>,
+) -> impl View {
+    button(text).on_click(on_click)
+}
+
+let save = action_button("Save", || {
+    println!("save");
+});
+```
+
+## Omitting Unused Parameters
+
+If you only do not use some parameters, you can still use `_` or `_name` to ignore them:
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -80,7 +132,26 @@ let item = label("Delete")
     });
 ```
 
-Don't reduce parameter count yourself. For example `on_click` needs mouse handler, callback should receive three parameters; just write unused ones as `_`.
+Now you can also reduce the parameter count directly. Common supported forms include:
+
+```rust
+use flor::view::builder::EventBuilder;
+use flor_lys::label::label;
+
+let save = label("Save").on_click(|| {
+    println!("save");
+});
+
+let source = label("Source").on_click(|view_id| {
+    println!("save from {view_id}");
+});
+
+let inspect = label("Inspect").on_click(|key_state, _pos| {
+    println!("ctrl: {}", key_state.control_is_down);
+});
+```
+
+The full-argument form is still available. Reduced parameters are useful when business logic does not care about the widget ID, mouse position, or button state.
 
 ## Mouse Events
 
@@ -115,7 +186,7 @@ use flor_lys::label::label;
 
 let editor = label("Press Ctrl+S to save")
     .focus_index(0)
-    .on_key_down(|_, code, is_alt, is_ctrl, is_shift| {
+    .on_key_down(|code, is_alt, is_ctrl, is_shift| {
         if !is_alt && is_ctrl && !is_shift && code == KeyCode::S {
             println!("save");
             HandleResult::Handled
@@ -125,7 +196,7 @@ let editor = label("Press Ctrl+S to save")
     });
 ```
 
-Keyboard handler returns `HandleResult`. Returning `Handled` means this key is already handled; returning `Default` means交给 default handling. Keyboard handler's complete signature see [Keyboard Events API](/en/api/handler#keyboard-events).
+Keyboard handler returns `HandleResult`. Returning `Handled` means this key is already handled; returning `Default` means using default handling. Keyboard handlers can use the full arguments or omit `ViewId`; the complete signature is in [Keyboard Events API](/en/api/handler#keyboard-events).
 
 ## Focus and Lifecycle Events
 
@@ -137,11 +208,11 @@ use flor_lys::label::label;
 
 let input = label("Name")
     .focus_index(0)
-    .on_focus(|view_id, virtual_index| {
-        println!("focus {view_id}: {virtual_index}");
+    .on_focus(|virtual_index| {
+        println!("focus index: {virtual_index}");
     })
-    .on_blur(|view_id, virtual_index| {
-        println!("blur {view_id}: {virtual_index}");
+    .on_blur(|| {
+        println!("blur");
     });
 ```
 
@@ -169,8 +240,8 @@ use flor_lys::label::label;
 
 #[cfg(feature = "drag-drop")]
 let drop_area = label("Drop Here")
-    .on_drop(|view_id, _key_state, _mouse_position, data, _effect| {
-        println!("drop on {view_id}: {data:?}");
+    .on_drop(|_key_state, _mouse_position, data, _effect| {
+        println!("drop: {data:?}");
     });
 ```
 

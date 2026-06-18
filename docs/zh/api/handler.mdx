@@ -7,6 +7,7 @@
 ```rust
 use flor::view::builder::EventBuilder;
 use flor::view::handler::*;
+use flor::view::ViewId;
 
 use flor::base::platform::{
     HandleResult, KeyCode, KeyState, MousePosition, ScrollAxis,
@@ -22,63 +23,120 @@ use flor::base::platform::ThemeMode;
 
 ## `EventBuilder`
 
-`EventBuilder` 对所有 `V: View` 实现。所有方法都会保存 handler 并返回 `Self`，用于链式调用。
+`EventBuilder` 对所有 `V: ViewIdentity` 实现。所有方法都会保存 handler 并返回 `Self`，用于链式调用。普通控件、`ViewBox`、以及函数返回的 `impl IntoView` 都可以继续使用这些方法。
 
 ```rust
 pub trait EventBuilder {
-    fn on_mouse_move(self, handler: impl Into<OnMouseMoveHandler>) -> Self;
-    fn on_double_click(self, handler: impl Into<OnDoubleClickHandler>) -> Self;
-    fn on_click(self, handler: impl Into<OnClickHandler>) -> Self;
-    fn on_button_down(self, handler: impl Into<OnButtonDownHandler>) -> Self;
-    fn on_button_up(self, handler: impl Into<OnButtonUpHandler>) -> Self;
+    fn on_mouse_move<Args>(self, handler: impl IntoEventHandler<OnMouseMoveHandler, Args>) -> Self;
+    fn on_double_click<Args>(self, handler: impl IntoEventHandler<OnDoubleClickHandler, Args>) -> Self;
+    fn on_click<Args>(self, handler: impl IntoEventHandler<OnClickHandler, Args>) -> Self;
+    fn on_button_down<Args>(self, handler: impl IntoEventHandler<OnButtonDownHandler, Args>) -> Self;
+    fn on_button_up<Args>(self, handler: impl IntoEventHandler<OnButtonUpHandler, Args>) -> Self;
 
-    fn on_right_button_double_click(
+    fn on_right_button_double_click<Args>(
         self,
-        handler: impl Into<OnRightButtonDoubleClickHandler>,
+        handler: impl IntoEventHandler<OnRightButtonDoubleClickHandler, Args>,
     ) -> Self;
-    fn on_right_button_click(self, handler: impl Into<OnRightButtonClickHandler>) -> Self;
-    fn on_right_button_down(self, handler: impl Into<OnRightButtonDownHandler>) -> Self;
-    fn on_right_button_up(self, handler: impl Into<OnRightButtonUpHandler>) -> Self;
+    fn on_right_button_click<Args>(self, handler: impl IntoEventHandler<OnRightButtonClickHandler, Args>) -> Self;
+    fn on_right_button_down<Args>(self, handler: impl IntoEventHandler<OnRightButtonDownHandler, Args>) -> Self;
+    fn on_right_button_up<Args>(self, handler: impl IntoEventHandler<OnRightButtonUpHandler, Args>) -> Self;
 
-    fn on_middle_button_double_click(
+    fn on_middle_button_double_click<Args>(
         self,
-        handler: impl Into<OnMiddleButtonDoubleClickHandler>,
+        handler: impl IntoEventHandler<OnMiddleButtonDoubleClickHandler, Args>,
     ) -> Self;
-    fn on_middle_button_down(self, handler: impl Into<OnMiddleButtonDownHandler>) -> Self;
-    fn on_middle_button_up(self, handler: impl Into<OnMiddleButtonUpHandler>) -> Self;
+    fn on_middle_button_down<Args>(self, handler: impl IntoEventHandler<OnMiddleButtonDownHandler, Args>) -> Self;
+    fn on_middle_button_up<Args>(self, handler: impl IntoEventHandler<OnMiddleButtonUpHandler, Args>) -> Self;
 
-    fn on_context_menu(self, handler: impl Into<OnContextMenuHandler>) -> Self;
+    fn on_context_menu<Args>(self, handler: impl IntoEventHandler<OnContextMenuHandler, Args>) -> Self;
 
-    fn on_key_down(self, handler: impl Into<OnKeyDownHandler>) -> Self;
-    fn on_key_up(self, handler: impl Into<OnKeyUpHandler>) -> Self;
+    fn on_key_down<Args>(self, handler: impl IntoEventHandler<OnKeyDownHandler, Args>) -> Self;
+    fn on_key_up<Args>(self, handler: impl IntoEventHandler<OnKeyUpHandler, Args>) -> Self;
 
-    fn on_mouse_enter(self, handler: impl Into<OnMouseEnterHandler>) -> Self;
-    fn on_mouse_leave(self, handler: impl Into<OnMouseLeaveHandler>) -> Self;
-    fn on_focus(self, handler: impl Into<OnFocusHandler>) -> Self;
-    fn on_blur(self, handler: impl Into<OnBlurHandler>) -> Self;
-    fn on_create(self, handler: impl Into<OnCreateHandler>) -> Self;
-    fn on_destroy(self, handler: impl Into<OnDestroyHandler>) -> Self;
+    fn on_mouse_enter<Args>(self, handler: impl IntoEventHandler<OnMouseEnterHandler, Args>) -> Self;
+    fn on_mouse_leave<Args>(self, handler: impl IntoEventHandler<OnMouseLeaveHandler, Args>) -> Self;
+    fn on_focus<Args>(self, handler: impl IntoEventHandler<OnFocusHandler, Args>) -> Self;
+    fn on_blur<Args>(self, handler: impl IntoEventHandler<OnBlurHandler, Args>) -> Self;
+    fn on_create<Args>(self, handler: impl IntoEventHandler<OnCreateHandler, Args>) -> Self;
+    fn on_destroy<Args>(self, handler: impl IntoEventHandler<OnDestroyHandler, Args>) -> Self;
 
-    fn on_resize(self, handler: impl Into<OnResizeHandler>) -> Self;
-    fn on_close_requested(self, handler: impl Into<OnCloseRequestedHandler>) -> Self;
-    fn on_work_area_changed(self, handler: impl Into<OnWorkAreaChangedHandler>) -> Self;
-    fn on_wheel_settings_changed(
+    fn on_resize<Args>(self, handler: impl IntoEventHandler<OnResizeHandler, Args>) -> Self;
+    fn on_close_requested<Args>(self, handler: impl IntoEventHandler<OnCloseRequestedHandler, Args>) -> Self;
+    fn on_work_area_changed<Args>(self, handler: impl IntoEventHandler<OnWorkAreaChangedHandler, Args>) -> Self;
+    fn on_wheel_settings_changed<Args>(
         self,
-        handler: impl Into<OnWheelSettingsChangedHandler>,
+        handler: impl IntoEventHandler<OnWheelSettingsChangedHandler, Args>,
     ) -> Self;
-    fn on_dpi_change(self, handler: impl Into<OnDpiChangeHandler>) -> Self;
+    fn on_dpi_change<Args>(self, handler: impl IntoEventHandler<OnDpiChangeHandler, Args>) -> Self;
 
     #[cfg(feature = "theme-change")]
-    fn on_theme_changed(self, handler: impl Into<OnThemeChangedHandler>) -> Self;
+    fn on_theme_changed<Args>(self, handler: impl IntoEventHandler<OnThemeChangedHandler, Args>) -> Self;
 
     #[cfg(feature = "drag-drop")]
-    fn on_drag_enter(self, handler: impl Into<OnDragEnterHandler>) -> Self;
+    fn on_drag_enter<Args>(self, handler: impl IntoEventHandler<OnDragEnterHandler, Args>) -> Self;
     #[cfg(feature = "drag-drop")]
-    fn on_drag_over(self, handler: impl Into<OnDragOverHandler>) -> Self;
+    fn on_drag_over<Args>(self, handler: impl IntoEventHandler<OnDragOverHandler, Args>) -> Self;
     #[cfg(feature = "drag-drop")]
-    fn on_drag_leave(self, handler: impl Into<OnDragLeaveHandler>) -> Self;
+    fn on_drag_leave<Args>(self, handler: impl IntoEventHandler<OnDragLeaveHandler, Args>) -> Self;
     #[cfg(feature = "drag-drop")]
-    fn on_drop(self, handler: impl Into<DropHandler>) -> Self;
+    fn on_drop<Args>(self, handler: impl IntoEventHandler<DropHandler, Args>) -> Self;
+}
+```
+
+## `IntoEventHandler`
+
+`IntoEventHandler<T, Args>` 是事件 builder 接收 handler 的转换入口。它把闭包、普通函数、关联函数、方法项或已经确定泛型参数的泛型函数，转换成目标 handler 包装类型。
+
+```rust
+pub trait IntoEventHandler<T, Args> {
+    fn into_event_handler(self) -> T;
+}
+```
+
+转换分两层：
+
+| 层级 | 机制 |
+| --- | --- |
+| 完整参数 | handler 包装类型实现 `From<F>`，`IntoEventHandler<T, FullArgs>` 再通过 `F: Into<T>` 调用这个 `From` 转换 |
+| 简化参数 | `IntoEventHandler<T, Args>` 针对无参数、只接收 `ViewId`、省略 `ViewId` 等形态补齐被省略的参数 |
+
+所以完整参数形态是 `From` 驱动的转换，事件 Builder 再用 `IntoEventHandler<T, Args>` 把不同参数形态统一到同一个入口。`Args` 是编译期标记，用来区分参数形态；调用 `.on_click(...)`、`.on_key_down(...)` 时通常由 Rust 自动推导，不需要手写。
+
+例如 `on_click` 的底层类型是 `MouseHandler`，以下四种写法都可以转换成 `OnClickHandler`：
+
+```rust
+view.on_click(|view_id, key_state, mouse_position| { /* 完整参数 */ });
+view.on_click(|| { /* 不关心事件参数 */ });
+view.on_click(|view_id| { /* 只关心控件 */ });
+view.on_click(|key_state, mouse_position| { /* 省略 ViewId */ });
+```
+
+只有 `ViewId` 一个完整参数的 `Handler` 别名事件，例如 `on_mouse_enter`、`on_mouse_leave`、`on_create`、`on_destroy`、`on_resize`，没有“省略 `ViewId` 后继续接收事件数据”的形态，因此只支持完整参数和无参数。
+
+函数和方法项只要最终满足对应的 `Fn(...) + Send + Sync + 'static` 签名，也会参与同一套转换：
+
+```rust
+fn clicked(view_id: ViewId) {
+    println!("{view_id}");
+}
+
+struct Actions;
+
+impl Actions {
+    fn open<const SLOT: usize>(view_id: ViewId) {
+        println!("open {SLOT}: {view_id}");
+    }
+}
+
+view.on_click(clicked);
+view.on_click(Actions::open::<1>);
+```
+
+如果你要在自己的控件封装里继续接收并转发 handler，不要退回到 `impl Into<OnClickHandler>`。应保留 `Args` 泛型，这样调用方仍然可以使用完整参数、无参数、只接收 `ViewId`、省略 `ViewId` 这几种形态：
+
+```rust
+fn accept_click<Args>(handler: impl IntoEventHandler<OnClickHandler, Args>) -> OnClickHandler {
+    handler.into_event_handler()
 }
 ```
 
@@ -168,7 +226,7 @@ pub struct ViewHandler {
 
 ## Handler 包装类型
 
-所有 handler 包装类型都实现了 `From<F>`，其中 `F` 是对应签名的闭包或函数，并满足 `Send + Sync + 'static`。因此用户侧通常直接传闭包，不需要手动构造包装类型。
+所有 handler 包装类型都实现了完整参数签名的 `From<F>`，其中 `F` 是对应签名的闭包或函数，并满足 `Send + Sync + 'static`。事件 builder 还通过 `IntoEventHandler` 支持若干简化参数形态，因此用户侧通常直接传闭包，不需要手动构造包装类型。
 
 ### `Handler`
 
@@ -177,6 +235,13 @@ pub struct Handler(pub Arc<dyn Fn(ViewId) + Send + Sync + 'static>);
 ```
 
 用于只需要 `ViewId` 的事件。
+
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id\| { ... }` |
+| 无参数 | `\|\| { ... }` |
 
 ### `MouseHandler`
 
@@ -187,6 +252,15 @@ pub struct MouseHandler(
 ```
 
 用于鼠标移动、点击、按下、松开、双击等事件。
+
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, key_state, mouse_position\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|key_state, mouse_position\| { ... }` |
 
 ### `KeyHandler`
 
@@ -203,6 +277,15 @@ pub struct KeyHandler(
 
 参数依次是 `ViewId`、`KeyCode`、`is_alt`、`is_ctrl`、`is_shift`。
 
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, code, is_alt, is_ctrl, is_shift\| -> HandleResult { ... }` |
+| 无参数 | `\|\| -> HandleResult { ... }` |
+| 只接收 `ViewId` | `\|view_id\| -> HandleResult { ... }` |
+| 省略 `ViewId` | `\|code, is_alt, is_ctrl, is_shift\| -> HandleResult { ... }` |
+
 ### `FocusHandler`
 
 ```rust
@@ -212,6 +295,15 @@ pub struct FocusHandler(
 ```
 
 第二个参数是虚拟焦点序号。
+
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, focus_index\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|focus_index\| { ... }` |
 
 ### `OnWheelSettingsChangedHandler`
 
@@ -228,6 +320,15 @@ pub struct OnWheelSettingsChangedHandler(
 
 参数依次是 `ViewId`、滚动方向、滚动量、按键状态、鼠标位置。
 
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, axis, delta, key_state, mouse_position\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|axis, delta, key_state, mouse_position\| { ... }` |
+
 ### `OnDpiChangeHandler`
 
 ```rust
@@ -238,6 +339,15 @@ pub struct OnDpiChangeHandler(
 
 第二、第三个参数分别是 `dpi_x` 和 `dpi_y`。
 
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, dpi_x, dpi_y\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|dpi_x, dpi_y\| { ... }` |
+
 ### `OnThemeChangedHandler`
 
 需要 `theme-change` feature。
@@ -247,6 +357,15 @@ pub struct OnThemeChangedHandler(
     pub Arc<dyn Fn(ViewId, ThemeMode) + Send + Sync + 'static>,
 );
 ```
+
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, theme_mode\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|theme_mode\| { ... }` |
 
 ### `DragEnterOverHandler`
 
@@ -265,6 +384,15 @@ pub struct DragEnterOverHandler(
 
 用于 `on_drag_enter` 和 `on_drag_over`。
 
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, key_state, mouse_position, formats, effect\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|key_state, mouse_position, formats, effect\| { ... }` |
+
 ### `DropHandler`
 
 需要 `drag-drop` feature。
@@ -281,6 +409,15 @@ pub struct DropHandler(
 ```
 
 用于 `on_drop`。
+
+可接收：
+
+| 形态 | 示例 |
+| --- | --- |
+| 完整参数 | `\|view_id, key_state, mouse_position, data, effect\| { ... }` |
+| 无参数 | `\|\| { ... }` |
+| 只接收 `ViewId` | `\|view_id\| { ... }` |
+| 省略 `ViewId` | `\|key_state, mouse_position, data, effect\| { ... }` |
 
 ## 类型别名
 

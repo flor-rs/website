@@ -55,7 +55,7 @@ use flor_lys::label::label;
 
 let item = label("点击后获得焦点")
     .focus_index(0)
-    .on_click(|_, _, _| {
+    .on_click(|| {
         println!("clicked");
     });
 ```
