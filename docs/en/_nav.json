@@ -164,7 +164,32 @@
   },
   {
     "text": "API",
-    "link": "/api/",
+    "items": [
+      {
+        "text": "API Overview",
+        "link": "/api/"
+      },
+      {
+        "text": "Class Syntax Basics",
+        "link": "/api/class-syntax"
+      },
+      {
+        "text": "Layout Class Syntax",
+        "link": "/api/layout-class"
+      },
+      {
+        "text": "Signal API",
+        "link": "/api/signal"
+      },
+      {
+        "text": "View Conversion API",
+        "link": "/api/view"
+      },
+      {
+        "text": "Handler API",
+        "link": "/api/handler"
+      }
+    ],
     "activeMatch": "/api/"
   }
 ]

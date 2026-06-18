@@ -164,7 +164,32 @@
   },
   {
     "text": "API",
-    "link": "/api/",
+    "items": [
+      {
+        "text": "API 总览",
+        "link": "/api/"
+      },
+      {
+        "text": "Class 语法解析基础",
+        "link": "/api/class-syntax"
+      },
+      {
+        "text": "Layout class 语法",
+        "link": "/api/layout-class"
+      },
+      {
+        "text": "信号 API",
+        "link": "/api/signal"
+      },
+      {
+        "text": "View 转换 API",
+        "link": "/api/view"
+      },
+      {
+        "text": "Handler API",
+        "link": "/api/handler"
+      }
+    ],
     "activeMatch": "/api/"
   }
 ]
