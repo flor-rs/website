@@ -60,7 +60,7 @@ where
     V: IntoViewIter,
 ```
 
-`view_fn` is the window root view's build function. After Flor creates platform window, renderer and window entry, it passes current window's `WindowId` to it, and converts return value to window root widget tree.
+`view_fn` is the window root view's build function. After Flor creates platform window, renderer and window entry, it passes current window's `WindowId` to it, and converts return value to window root view tree.
 
 ```rust
 use flor::platform::WindowId;
@@ -78,9 +78,9 @@ If you don't need to use window ID, write it as `_window_id`.
 
 ## How to Use WindowId in open Parameter
 
-The `window_id` in `open(move |window_id| { ... })` is not recommended to directly call window control methods during root view build phase. At this time window is completing initialization, Flor is still mounting root view, registering renderer, initializing focus and refreshing layout; directly calling `set_size`, `set_window_mode`, `request_redraw`, `destroy` etc. in this closure easily makes initialization order超出预期, producing extra redraw, layout state inconsistency or platform layer behavior issues.
+It is not recommended to directly call window control methods using the `window_id` in `open(move |window_id| { ... })` during the root view build phase. At this time the window is completing initialization, Flor is still mounting the root view, registering the renderer, initializing focus and refreshing layout; directly calling `set_size`, `set_window_mode`, `request_redraw`, `destroy` etc. in this closure easily makes the initialization order unexpected, producing extra redraw, layout state inconsistency or platform layer behavior issues.
 
-This `WindowId` is more suitable for being captured into widget events, used to control current window in subsequent events:
+This `WindowId` is more suitable for being captured into view events, used to control current window in subsequent events:
 
 ```rust
 use flor::platform::base::WindowApi;
@@ -130,7 +130,7 @@ use flor::platform::WindowId;
 | `set_window_mode(mode)` | Set window mode. |
 | `get_window_mode()` | Read current window mode. |
 
-`WindowMode` includes `Normal`, `Minimized`, `Maximized`, `Fullscreen`. In current Windows implementation, `Fullscreen` is暂时 treated as maximized.
+`WindowMode` includes `Normal`, `Minimized`, `Maximized`, `Fullscreen`. In current Windows implementation, `Fullscreen` is temporarily treated as maximized.
 
 ### Position and Size
 
@@ -168,4 +168,4 @@ Position uses `i32`, allowing negative coordinates in multi-monitor environments
 | --- | --- |
 | `request_redraw()` | Asynchronously request window redraw. |
 
-Regular widget state changes are automatically requested for redraw by Flor. Only when you directly change external state through window or platform capabilities that framework can't感知, need to manually call `request_redraw()`.
+Regular view state changes are automatically requested for redraw by Flor. Only when you directly change external state through window or platform capabilities that framework can't detect, you need to manually call `request_redraw()`.

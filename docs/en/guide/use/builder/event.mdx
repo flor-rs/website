@@ -1,12 +1,12 @@
 # Event Builder
 
-Event Builder is used to attach external event handlers to widgets. It's suitable for application-side code: you don't need to write a new widget type, nor implement `View`, just chain bind events when creating widgets.
+Event Builder is used to attach external event handlers to views. It's suitable for application-side code: you don't need to write a new view type, nor implement `View`, just chain bind events when creating views.
 
 Complete method list, handler types and dispatch status see [Handler API](/en/api/handler). This page only explains how to use.
 
 ## Basic Writing
 
-After importing `EventBuilder`, all values implementing `ViewIdentity` can chain bind events. Normal widgets, `ViewBox`, and values returned as `impl IntoView` all satisfy this condition.
+After importing `EventBuilder`, all values implementing `ViewIdentity` can chain bind events. Normal views, `ViewBox`, and values returned as `impl IntoView` all satisfy this condition.
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -151,7 +151,7 @@ let inspect = label("Inspect").on_click(|key_state, _pos| {
 });
 ```
 
-The full-argument form is still available. Reduced parameters are useful when business logic does not care about the widget ID, mouse position, or button state.
+The full-argument form is still available. Reduced parameters are useful when business logic does not care about the view ID, mouse position, or button state.
 
 ## Mouse Events
 
@@ -173,11 +173,11 @@ let item = label("Clickable")
     });
 ```
 
-Regular mouse hit events' `MousePosition` is target widget's local coordinates. Complete mouse event list see [Handler API's current dispatch status](/en/api/handler#current-dispatch-status).
+Regular mouse hit events' `MousePosition` is target view's local coordinates. Complete mouse event list see [Handler API's current dispatch status](/en/api/handler#current-dispatch-status).
 
 ## Keyboard Events
 
-Keyboard events are dispatched to current focus widget. To let widget receive widget-level `on_key_down` / `on_key_up`, first let it enter focus table; focus mechanism see [Focus Mechanism](/en/guide/use/focus).
+Keyboard events are dispatched to current focus view. To let view receive view-level `on_key_down` / `on_key_up`, first let it enter focus table; focus mechanism see [Focus Mechanism](/en/guide/use/focus).
 
 ```rust
 use flor::base::platform::{HandleResult, KeyCode};
@@ -216,7 +216,7 @@ let input = label("Name")
     });
 ```
 
-`on_create` is suitable for doing one-time runtime initialization after widget tree creation, for example pushing focus scope for popup layer:
+`on_create` is suitable for doing one-time runtime initialization after view tree creation, for example pushing focus scope for popup layer:
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -228,11 +228,11 @@ let dialog = label("Popup Layer")
     });
 ```
 
-Lifecycle类 handler's aliases and parameters see [View and Lifecycle Events API](/en/api/handler#view-and-lifecycle-events).
+Lifecycle-type handler's aliases and parameters see [View and Lifecycle Events API](/en/api/handler#view-and-lifecycle-events).
 
 ## Feature-gated Events
 
-Drag-drop and theme change这类 events are controlled by feature. After enabling corresponding feature, related builder methods are available. Complete explanation see [Handler API](/en/api/handler).
+Drag-drop and theme change — these kinds of events are controlled by feature. After enabling the corresponding feature, related builder methods are available. Complete explanation see [Handler API](/en/api/handler).
 
 ```rust
 use flor::view::builder::EventBuilder;

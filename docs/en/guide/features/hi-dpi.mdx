@@ -1,6 +1,6 @@
 # High DPI
 
-`hi-dpi` feature is used to enable process-level DPI awareness. It will让 application receive more accurate DPI information, and让 Flor update rendering scaling and layout units when window DPI changes.
+`hi-dpi` feature is used to enable process-level DPI awareness. It will let the application receive more accurate DPI information, and let Flor update rendering scaling and layout units when window DPI changes.
 
 ```toml
 [dependencies]
@@ -14,10 +14,10 @@ After enabling, platform initialization will set DPI awareness. When window rece
 | Content | Result |
 | --- | --- |
 | Renderer scaling | Rendering backend will receive new `dpi_x` / `dpi_y`. |
-| Layout units | `pt`等 DPI-dependent units will use new DPI to recalculate. |
-| Layout cache | After DPI change will clear layout resolver cache and重新 layout. |
+| Layout units | `pt` and other DPI-dependent units will use new DPI to recalculate. |
+| Layout cache | After DPI change will clear layout resolver cache and re-layout. |
 
-If need to感知 DPI change at application layer, can use event builder:
+If you need to detect DPI change at the application layer, you can use the event builder:
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -29,4 +29,4 @@ let root = label("DPI")
     });
 ```
 
-`on_dpi_change(...)`'s complete signature see [Handler API's Window Events](/en/api/handler#窗口事件).
+`on_dpi_change(...)`'s complete signature see [Handler API's Window Events](/en/api/handler#window-events).

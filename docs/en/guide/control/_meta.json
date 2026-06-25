@@ -16,7 +16,7 @@
   },
   {
     "type": "file",
-    "name": "create-widget",
-    "label": "Creating Widgets"
+    "name": "create-view",
+    "label": "Creating Views"
   }
 ]

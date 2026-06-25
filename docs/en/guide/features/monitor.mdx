@@ -1,6 +1,6 @@
 # Monitor Information
 
-`monitor` feature is used to enable monitor query capability. It适合 do window initial positioning, multi-screen adaptation, read work area size, adjust custom logic by monitor DPI等.
+`monitor` feature is used to enable monitor query capability. It is suitable for initial window positioning, multi-screen adaptation, reading work area size, adjusting custom logic by monitor DPI, and similar tasks.
 
 ```toml
 [dependencies]
@@ -34,10 +34,10 @@ for monitor in monitors {
 | Method | Purpose |
 | --- | --- |
 | `Monitor::enumerate_monitors()` | Enumerate all monitors. |
-| `Monitor::monitor_from_point(x, y)` | Query monitor at某 screen coordinate. |
+| `Monitor::monitor_from_point(x, y)` | Query monitor at a given screen coordinate. |
 | `Monitor::monitor_from_window_id(window_id)` | Query monitor where window is located. |
 | `monitor.rect()` | Monitor complete area. |
-| `monitor.work_area()` | Available work area, usually will exclude taskbar等 system areas. |
+| `monitor.work_area()` | Available work area, usually will exclude taskbar and other system areas. |
 | `monitor.scale_factor()` | Scale factor, usually derived from DPI. |
 | `monitor.dpi_x()` / `monitor.dpi_y()` | Current monitor DPI. |
 

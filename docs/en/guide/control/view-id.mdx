@@ -1,12 +1,12 @@
 # ViewId
 
-`ViewId` is widget's identifier and operation handle in Flor runtime. Widget tree, layout state, event handlers, focus table, scroll state, mouse capture and render resources are all associated to same widget through it.
+`ViewId` is view's identifier and operation handle in Flor runtime. View tree, layout state, event handlers, focus table, scroll state, mouse capture and render resources are all associated to same view through it.
 
-This page targets two scenarios: operating current widget in event callbacks, or accessing runtime capabilities through `self.view_id` in custom widget implementation. When only want to configure focus order, prefer reading [Focus Builder](/en/guide/use/builder/focus).
+This page targets two scenarios: operating current view in event callbacks, or accessing runtime capabilities through `self.view_id` in custom view implementation. When only want to configure focus order, prefer reading [Focus Builder](/en/guide/use/builder/focus).
 
 ## Getting ViewId
 
-Event builder callbacks pass target widget's `ViewId` as first parameter:
+Event builder callbacks pass target view's `ViewId` as first parameter:
 
 ```rust
 use flor::view::builder::EventBuilder;
@@ -18,7 +18,7 @@ let item = label("Click")
     });
 ```
 
-Custom widgets usually save `ViewId` as field, and create in constructor:
+Custom views usually save `ViewId` as field, and create in constructor:
 
 ```rust
 use flor::view::{View, ViewId};
@@ -42,13 +42,13 @@ impl View for MyView {
 }
 ```
 
-`ViewId::new()` registers basic `ViewState` and `ViewHandler`. `ViewId::new_with_layout(...)` allows customizing `LayoutResolver` when creating, generally only used when underlying widgets or layout system need to接管 initial layout resolver.
+`ViewId::new()` registers basic `ViewState` and `ViewHandler`. `ViewId::new_with_layout(...)` allows customizing `LayoutResolver` when creating, generally only used when underlying views or layout system need to take over the initial layout resolver.
 
 ## Redraw Request
 
-> **This is Flor widget development's highest-level hard rule, please务必遵守.**
+> **This is Flor view development's highest-level hard rule, please strictly follow it.**
 
-No matter whether your widget runs in immediate mode or retained mode, whenever internal visual-affecting properties change, must call `view_id.request_redraw()`.
+No matter whether your view runs in immediate mode or retained mode, whenever internal visual-affecting properties change, must call `view_id.request_redraw()`.
 
 ```rust
 // In on_update_state, on_frame, event callbacks or anywhere modifying visual properties
@@ -56,7 +56,7 @@ self.color = new_color;
 self.view_id.request_redraw(); // Must call
 ```
 
-Flor won't automatically track widget internal field changes. If you modified color, text, image handle, animation state or any field affecting drawing result, but don't call `request_redraw()`, window won't redraw, user won't see change.
+Flor won't automatically track view internal field changes. If you modified color, text, image handle, animation state or any field affecting drawing result, but don't call `request_redraw()`, window won't redraw, user won't see change.
 
 This rule applies to:
 
@@ -65,11 +65,11 @@ This rule applies to:
 - After modifying internal state in event callbacks
 - After changing visual properties in any custom method
 
-If you find visual not updating when implementing custom widget, first check whether missed `request_redraw()` call. Other widget development chapters will repeatedly emphasize this point, for example [View Trait's lifecycle hooks](/en/guide/control/view-trait#lifecycle-and-state).
+If you find visual not updating when implementing custom view, first check whether missed `request_redraw()` call. Other view development chapters will repeatedly emphasize this point, for example [View Trait's lifecycle hooks](/en/guide/control/view-trait#lifecycle-and-state).
 
 ## State and Layout
 
-`ViewId` can read current widget's layout and state:
+`ViewId` can read current view's layout and state:
 
 ```rust
 let layout = view_id.layout()?;
@@ -90,19 +90,19 @@ view_id.with_state_mut(|state| {
 
 ## State Update
 
-`update_state` hands arbitrary `Box<dyn Any>` to widget instance's `View::on_update_state`, then requests redraw:
+`update_state` hands arbitrary `Box<dyn Any>` to view instance's `View::on_update_state`, then requests redraw:
 
 ```rust
 view_id.update_state(Box::new(String::from("New title")));
 ```
 
-Widget needs to downcast and update internal fields in its own `on_update_state`. For example text, image handle, style update objects这类 widget private state all适合 going through this path.
+View needs to downcast and update internal fields in its own `on_update_state`. For example text, image handle, style update objects — these kinds of view private state are all suitable for going through this path.
 
-If enabled `class` feature, `update_class(layer_id, class_str)` parses class name, updates layout resolver, and calls widget's `on_update_class(control_state, class)`. `z-*` classes will be recognized as z-index and removed from class list.
+If enabled `class` feature, `update_class(layer_id, class_str)` parses class name, updates layout resolver, and calls view's `on_update_class(control_state, class)`. `z-*` classes will be recognized as z-index and removed from class list.
 
-## Widget Tree and Window
+## View Tree and Window
 
-`ViewId` records widget's relationship in tree and belonging window:
+`ViewId` records view's relationship in tree and belonging window:
 
 ```rust
 let parent = view_id.parent_view_id();
@@ -111,7 +111,7 @@ let window = view_id.window_id();
 parent_view_id.push_view(Box::new(child));
 ```
 
-`push_view` adds child widget to current widget, rebuilds subtree window attribution, and triggers parent widget's `on_child_push`. Application layer usually organizes tree through `ViewBuilder::views`, `ViewBuilder::push_view` or `views![]` macro; directly calling `ViewId::push_view` is more suitable for runtime appending child widgets.
+`push_view` adds child view to current view, rebuilds subtree window attribution, and triggers parent view's `on_child_push`. Application layer usually organizes tree through `ViewBuilder::views`, `ViewBuilder::push_view` or `views![]` macro; directly calling `ViewId::push_view` is more suitable for runtime appending child views.
 
 ## Focus Manipulation
 
@@ -129,7 +129,7 @@ impl ViewId {
 
 ### update_focus_index
 
-`update_focus_index` updates at runtime whether widget participates in focus table.
+`update_focus_index` updates at runtime whether view participates in focus table.
 
 ```rust
 view_id.update_focus_index(Some(0));  // Add or update focus table, sort value 0
@@ -137,9 +137,9 @@ view_id.update_focus_index(Some(10)); // Add or update focus table, sort value 1
 view_id.update_focus_index(None);     // Remove from focus table
 ```
 
-`Some(0)` is legal sort value. `None`才 indicates exiting focus system.
+`Some(0)` is legal sort value. Only `None` indicates exiting the focus system.
 
-Current implementation updates by single focus entry: it first removes this `ViewId`'s existing focus entries, then inserts `(index, view_id, 0)` when `Some(index)`. If widget developer implemented multiple virtual focus, initializing focus table will expand by `on_focus_count()`; runtime `update_focus_index` currently only inserts virtual focus `0`.
+Current implementation updates by single focus entry: it first removes this `ViewId`'s existing focus entries, then inserts `(index, view_id, 0)` when `Some(index)`. If view developer implemented multiple virtual focus, initializing focus table will expand by `on_focus_count()`; runtime `update_focus_index` currently only inserts virtual focus `0`.
 
 ### set_focus
 
@@ -151,9 +151,9 @@ view_id.set_focus(Some(1)); // Focus to second virtual focus
 view_id.set_focus(None);    // If current focus is on this ViewId, cancel it
 ```
 
-`set_focus(Some(index))` requires this `(ViewId, virtual_index)` already exists in focus table. Widgets without `focus_index` set won't be successfully focused. When passing non-existent virtual focus number, method won't change current focus.
+`set_focus(Some(index))` requires this `(ViewId, virtual_index)` already exists in focus table. Views without `focus_index` set won't be successfully focused. When passing non-existent virtual focus number, method won't change current focus.
 
-`set_focus(None)` only clears focus held by this `ViewId`: if current focus is on it, will trigger `blur` and let window enter no current focus state; if current focus is on other widget, won't clear other widget.
+`set_focus(None)` only clears focus held by this `ViewId`: if current focus is on it, will trigger `blur` and let window enter no current focus state; if current focus is on other view, won't clear other view.
 
 ### is_focused
 
@@ -167,7 +167,7 @@ if view_id.is_focused() {
 
 ### push_focus_scope and pop_focus_scope
 
-These two methods are for runtime focus scope. When opening Modal, Popup, Sidebar, push root widget into scope; when closing, pop scope.
+These two methods are for runtime focus scope. When opening Modal, Popup, Sidebar, push root view into scope; when closing, pop scope.
 
 ```rust
 dialog_root_id.push_focus_scope();
@@ -176,11 +176,11 @@ dialog_root_id.push_focus_scope();
 dialog_root_id.pop_focus_scope();
 ```
 
-After pushing into scope, Tab and Shift+Tab only cycle in this root widget's subtree. `pop_focus_scope` will pop current scope, and try to restore focus before entering scope.
+After pushing into scope, Tab and Shift+Tab only cycle in this root view's subtree. `pop_focus_scope` will pop current scope, and try to restore focus before entering scope.
 
-## Widget State
+## View State
 
-`ViewId` can judge widget's runtime interaction state:
+`ViewId` can judge view's runtime interaction state:
 
 ```rust
 let state = view_id.control_state();
@@ -189,7 +189,7 @@ let hovered = view_id.is_hover();
 let active = view_id.is_active();
 ```
 
-`control_state()` priority is `Disabled > Active > Focus > Hover > Normal`. `control_state_with_pressed(pressed)` allows widget to calculate `ControlState` with a temporary pressed state, but it only considers `Disabled`, passed `pressed`, `Hover` and `Normal`.
+`control_state()` priority is `Disabled > Active > Focus > Hover > Normal`. `control_state_with_pressed(pressed)` allows view to calculate `ControlState` with a temporary pressed state, but it only considers `Disabled`, passed `pressed`, `Hover` and `Normal`.
 
 `is_active()` queries framework recorded pressed state. `is_hover()` queries belonging window's current hover target.
 
@@ -204,11 +204,11 @@ let z = view_id.z_index();
 
 `set_z_index()` updates z-index in storage, and re-sorts sibling child nodes when having parent node.
 
-`visual()` returns whether current widget was marked as visible in most recent draw. Framework internally uses it to skip invisible widgets' `on_frame`, custom widgets generally only need to know: this value comes from drawing phase's visibility cache, not complete replacement of layout style.
+`visual()` returns whether current view was marked as visible in most recent draw. Framework internally uses it to skip invisible views' `on_frame`, custom views generally only need to know: this value comes from drawing phase's visibility cache, not complete replacement of layout style.
 
 ## Scroll
 
-Scroll capability becomes effective after widget registers `ScrollState`:
+Scroll capability becomes effective after view registers `ScrollState`:
 
 ```rust
 if view_id.is_scroll_view() {
@@ -237,7 +237,7 @@ After capturing, window records `capture_view_id`, platform layer also enters mo
 
 ## Transform and Coordinate Conversion
 
-Declarative transform affects widget itself and child widgets' drawing, layout's accumulated transform and hit test:
+Declarative transform affects view itself and child views' drawing, layout's accumulated transform and hit test:
 
 ```rust
 use flor::types::Transform2D;
@@ -247,7 +247,7 @@ let transform = view_id.get_transform();
 view_id.clear_transform();
 ```
 
-`set_transform` and `clear_transform` request redraw. After layout refresh, framework calculates each widget's accumulated transform. When needing to convert window coordinates to widget local coordinates, can use:
+`set_transform` and `clear_transform` request redraw. After layout refresh, framework calculates each view's accumulated transform. When needing to convert window coordinates to view local coordinates, can use:
 
 ```rust
 let local = view_id.window_to_local_position(mouse_position);

@@ -1,6 +1,6 @@
 # Drag-Drop
 
-`drag-drop` feature is used to enable system drag-drop events. After enabling, widgets can receive drag enter, hover, leave and release through event builder.
+`drag-drop` feature is used to enable system drag-drop events. After enabling, views can receive drag enter, hover, leave and release through event builder.
 
 ```toml
 [dependencies]
@@ -32,12 +32,12 @@ Events:
 
 | Method | Purpose |
 | --- | --- |
-| `on_drag_enter(...)` | Drag content enters widget hit area. |
-| `on_drag_over(...)` | Drag content moves on widget. |
-| `on_drag_leave(...)` | Drag content leaves widget. |
+| `on_drag_enter(...)` | Drag content enters view hit area. |
+| `on_drag_over(...)` | Drag content moves on view. |
+| `on_drag_leave(...)` | Drag content leaves view. |
 | `on_drop(...)` | User releases drag content. |
 
-Complete signature and current dispatch status see [Handler API's Drag-Drop Events](/en/api/handler#拖放事件).
+Complete signature and current dispatch status see [Handler API's Drag-Drop Events](/en/api/handler#drag-drop-events).
 
 ## Related Types
 
@@ -45,31 +45,31 @@ Drag-drop events will directly encounter these types:
 
 | Type | Purpose |
 | --- | --- |
-| `DropEffect` | Widget's drag-drop feedback to system,表示当前是拒绝,复制,移动,链接等效果. |
-| `DragFormat` | Data formats available in drag enter and hover阶段,用来判断当前拖进来的内容大概是什么类型. |
-| `DragData` | Real data obtained in `on_drop(...)`阶段. |
+| `DropEffect` | View's drag-drop feedback to system, indicating whether the current state is reject, copy, move, link, etc. |
+| `DragFormat` | Data formats available in the drag enter and hover phase, used to determine what type of content is being dragged in. |
+| `DragData` | Real data obtained in the `on_drop(...)` phase. |
 | `KeyState` | Mouse button and modifier key state when drag-drop occurs. |
 | `MousePosition` | Mouse coordinates when drag-drop occurs. |
 
-`on_drag_enter(...)` and `on_drag_over(...)` get `&[DragFormat]`,适合先判断能不能接收; `on_drop(...)` gets `&DragData`,适合读取真正的数据.
+`on_drag_enter(...)` and `on_drag_over(...)` get `&[DragFormat]`, suitable for first checking whether the data can be accepted; `on_drop(...)` gets `&DragData`, suitable for reading the real data.
 
 ## DropEffect
 
-`DropEffect` is used to tell system how current widget准备处理 drag content. Values include:
+`DropEffect` is used to tell the system how the current view intends to handle the drag content. Values include:
 
 | Value | Meaning |
 | --- | --- |
 | `DropEffect::None` | Not accept. |
-| `DropEffect::Copy` | Accept, and表示 copy. |
-| `DropEffect::Move` | Accept, and表示 move. |
-| `DropEffect::Link` | Accept, and表示 create link. |
-| `DropEffect::Scroll` |表示 scroll feedback occurred during drag-drop. |
+| `DropEffect::Copy` | Accept, and indicates copy. |
+| `DropEffect::Move` | Accept, and indicates move. |
+| `DropEffect::Link` | Accept, and indicates create link. |
+| `DropEffect::Scroll` | Indicates scroll feedback occurred during drag-drop. |
 
 In `on_drag_enter`, `on_drag_over` and `on_drop` can modify feedback through `&mut DropEffect`.
 
 ## DragFormat and DragData
 
-`DragFormat` is used for enter and hover阶段,表示 current drag object declares it can provide哪些 formats:
+`DragFormat` is used in the enter and hover phase, indicating what formats the current drag object declares it can provide:
 
 | Value | Meaning |
 | --- | --- |
@@ -78,7 +78,7 @@ In `on_drag_enter`, `on_drag_over` and `on_drop` can modify feedback through `&m
 | `DragFormat::Image(_)` | Image drag-drop. |
 | `DragFormat::Custom(_)` | Platform or application custom format. |
 
-`DragData` is used for final release阶段,表示 real data handed to widget:
+`DragData` is used in the final release phase, indicating the real data handed to the view:
 
 | Value | Meaning |
 | --- | --- |

@@ -1,6 +1,6 @@
 # Focus Mechanism
 
-Flor's focus is an explicit mechanism. Widgets won't automatically enter focus system just because they can be clicked, can display text, or bound keyboard events. A widget only enters focus table, then will be accessed by Tab, will become dispatch target for widget-level [`on_key_*`](/en/api/handler#keyboard-events), and will be triggered `on_focus` and `on_blur` by focus manager.
+Flor's focus is an explicit mechanism. Views won't automatically enter the focus system just because they can be clicked, can display text, or bound keyboard events. A view only enters the focus table when explicitly registered, then it will be accessed by Tab, will become the dispatch target for view-level [`on_key_*`](/en/api/handler#keyboard-events), and will have `on_focus` and `on_blur` triggered by the focus manager.
 
 First look at a minimal example:
 
@@ -16,13 +16,13 @@ let name = label("Name")
     });
 ```
 
-Widgets without `focus_index` won't enter focus table. They won't be selected by Tab; when clicking them, framework can't set focus to this widget; their widget-level `on_focus` / `on_blur` won't be triggered by focus manager; their widget-level [`on_key_*`](/en/api/handler#keyboard-events) won't be triggered because "this widget got focus".
+Views without `focus_index` won't enter the focus table. They won't be selected by Tab; when clicking them, the framework can't set focus to that view; their view-level `on_focus` / `on_blur` won't be triggered by the focus manager; their view-level [`on_key_*`](/en/api/handler#keyboard-events) won't be triggered because "this view got focus".
 
 For specific builder writing see [Focus Builder](/en/guide/use/builder/focus). For API to manipulate focus at runtime through `ViewId` see [ViewId](/en/guide/control/view-id).
 
 ## Keyboard Events Depend on Focus
 
-Keyboard events are dispatched to current focus widget. To let a widget handle widget-level keyboard events, need to let it enter focus table, and let it become current focus.
+Keyboard events are dispatched to the currently focused view. To let a view handle view-level keyboard events, it needs to enter the focus table and become the current focus.
 
 ```rust
 use flor::base::platform::{HandleResult, KeyCode};
@@ -41,13 +41,13 @@ let editor = label("Press Ctrl+S to save")
     });
 ```
 
-When there's no current focus widget, `key_down` / `key_up` will go through window-level processing; some normal widget that didn't get focus won't receive its own widget-level [`on_key_*`](/en/api/handler#keyboard-events). Text input and IME input also depend on current focus widget.
+When there's no current focus view, `key_down` / `key_up` will go through window-level processing; a normal view that didn't get focus won't receive its own view-level [`on_key_*`](/en/api/handler#keyboard-events). Text input and IME input also depend on the current focus view.
 
 ## Click and Focus
 
-Mouse events go through hit test, not same dispatch path as focus table. So widgets without `focus_index` can still receive `on_click`, `on_button_down`, `on_mouse_move` and similar mouse events.
+Mouse events go through hit test, not the same dispatch path as the focus table. So views without `focus_index` can still receive `on_click`, `on_button_down`, `on_mouse_move` and similar mouse events.
 
-When click ends, framework will try to set focus to clicked widget. This action is still limited by focus table: if target widget doesn't have `focus_index`, focus manager can't find corresponding entry, widget won't become current focus.
+When click ends, the framework will try to set focus to the clicked view. This action is still limited by the focus table: if the target view doesn't have `focus_index`, the focus manager can't find a corresponding entry, and the view won't become the current focus.
 
 ```rust
 use flor::view::builder::{EventBuilder, FocusIndexBuilder};
@@ -68,24 +68,24 @@ Entries in focus table are not just `ViewId`, but:
 (focus_index, ViewId, virtual_index)
 ```
 
-Most widgets only have one virtual focus point, number is `0`. So `on_focus` and `on_blur`'s second parameter common value is `0`.
+Most views only have one virtual focus point, number is `0`. So `on_focus` and `on_blur`'s second parameter common value is `0`.
 
 ```rust
 use flor::view::builder::{EventBuilder, FocusIndexBuilder};
 use flor_lys::label::label;
 
-let view = label("Single focus widget")
+let view = label("Single focus view")
     .focus_index(0)
     .on_focus(|_, virtual_index| {
         assert_eq!(virtual_index, 0);
     });
 ```
 
-Compound widgets can expose multiple virtual focus points. For example, an editor widget can design text area, completion panel, line number area as different focus positions within same widget. Terminal user only needs to read `virtual_index`, doesn't need to apply for virtual focus count; applying for count belongs to widget developer's `View::on_focus_count` capability.
+Compound views can expose multiple virtual focus points. For example, an editor view can design text area, completion panel, line number area as different focus positions within the same view. Terminal user only needs to read `virtual_index`, doesn't need to apply for virtual focus count; applying for count belongs to the view developer's `View::on_focus_count` capability.
 
 ## Sort Segmentation
 
-Complex pages often need to split focus order into several areas. Flor provides `focus_scope(u32)` as sort offset: it will affect final sort value of `focus_index` in current widget subtree.
+Complex pages often need to split focus order into several areas. Flor provides `focus_scope(u32)` as sort offset: it will affect final sort value of `focus_index` in the current view subtree.
 
 ```rust
 use flor::view::builder::FocusIndexBuilder;
@@ -108,7 +108,7 @@ let content = div(views![
 
 Final sort values for this set of focus are:
 
-| Widget | Local Writing | Final Sort Value |
+| View | Local Writing | Final Sort Value |
 | --- | --- | --- |
 | Tool 1 | `100 + 0` | `100` |
 | Tool 2 | `100 + 1` | `101` |
@@ -121,7 +121,7 @@ Final sort values for this set of focus are:
 
 Modal, Popup, Sidebar and similar interfaces need another capability: when opened, let Tab only cycle inside popup layer; after closed, restore previous focus position.
 
-Flor uses runtime focus scope to handle this scenario. When popup layer opens, push popup layer root widget into focus scope; when closing, pop this scope.
+Flor uses runtime focus scope to handle this scenario. When popup layer opens, push popup layer root view into focus scope; when closing, pop this scope.
 
 ```rust
 use flor::view::builder::{EventBuilder, FocusIndexBuilder};
@@ -140,21 +140,21 @@ let dialog = div(views![
 
 When closing popup layer call `pop_focus_scope`. For complete `ViewId` method description see [ViewId](/en/guide/control/view-id).
 
-Runtime scope only filters widgets already in focus table. If no widget inside popup layer sets `focus_index`, Tab has no target in this scope.
+Runtime scope only filters views already in focus table. If no view inside popup layer sets `focus_index`, Tab has no target in this scope.
 
 ## Mechanism Explanation
 
 When window creates, Flor initializes focus table:
 
-1. Traverse widget tree starting from window root node.
+1. Traverse view tree starting from window root node.
 2. When encountering `focus_scope(u32)`, add it to current cumulative offset.
 3. When encountering `focus_index(u32)`, use "cumulative offset + local index" to generate sort value.
-4. Query this widget's virtual focus count, default is `1`.
+4. Query this view's virtual focus count, default is `1`.
 5. Generate one `(focus_index, ViewId, virtual_index)` for each virtual focus.
 6. Sort all entries and hand to `FocusManager`.
 
 After Tab key enters event bus, `FocusManager::next()` will move backward in current focus table; Shift+Tab will call `prev()` to move forward. Each focus switch, old entry triggers `blur`, new entry triggers `focus`.
 
-If there's runtime focus scope, `FocusManager` will first filter focus table to subtree of stack top scope root widget, then execute next/prev.
+If there's runtime focus scope, `FocusManager` will first filter focus table to subtree of stack top scope root view, then execute next/prev.
 
-Keyboard events query current focus's `ViewId`, then dispatch to this widget. When no current focus, widget-level keyboard handler won't be called.
+Keyboard events query current focus's `ViewId`, then dispatch to this view. When no current focus, view-level keyboard handler won't be called.

@@ -22,7 +22,7 @@
   {
     "type": "file",
     "name": "control-state",
-    "label": "Widget State"
+    "label": "View State"
   },
   {
     "type": "dir",

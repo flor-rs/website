@@ -1,21 +1,21 @@
-# Resolver Layer Mechanism
+## Resolver Layer Mechanism
 
-Resolver Layer is Flor's mechanism for organizing widget configuration. It allows widget's layout and style to be written分段, repeatedly,按需覆盖, rather than requiring you to一次性 put all configuration拼成 one whole block.
+Resolver Layer is Flor's mechanism for organizing view configuration. It allows view's layout and style to be written in segments, repeatedly, and overridden on demand, rather than requiring you to assemble all configuration into one block at once.
 
-In usage code, `.class(...)`, `.layout(...)`, `.style(...)` all use this Layer mechanism. Each call to these builders can be understood as追加 one layer configuration to widget.
+In usage code, `.class(...)`, `.layout(...)`, `.style(...)` all use this Layer mechanism. Each call to these builders can be understood as appending one layer configuration to view.
 
 Layer's merge rule is simple:
 
 | Situation | Result |
 | --- | --- |
-| Different layers wrote different properties | These properties will merge and保留. |
-| Different layers wrote same property | Regardless of value same or different,都以 later written layer as standard. |
+| Different layers wrote different properties | These properties will merge and be retained. |
+| Different layers wrote same property | Regardless of value same or different, the later written layer takes precedence. |
 
-That is, you can拆开 class, layout, style to write multiple times, can also mix together. Later calls won't清空 previous whole layer configuration; it will only覆盖 properties it重新 wrote.
+That is, you can split class, layout, style to write multiple times, can also mix together. Later calls won't clear previous whole layer configuration; it will only override properties it rewrote.
 
 ## Mixed Calling
 
-For example first use class to write common layout, then use layout builder to precisely覆盖 one property:
+For example first use class to write common layout, then use layout builder to precisely override one property:
 
 ```rust
 use flor::taffy::Display;
@@ -43,7 +43,7 @@ Final result is: `display` uses later written `Display::Flex`, padding comes fro
 
 ## Same Property Override
 
-When same property is written multiple times, last written one生效. Class is like this:
+When same property is written multiple times, last written one takes effect. Class is like this:
 
 ```rust
 use flor::view::builder::ClassBuilder;
@@ -86,7 +86,7 @@ If `text-lg` and `font_size(20.0)` both are setting font size, then final font s
 
 ## Different Property Merge
 
-Later calls only覆盖 properties it重新 wrote. Properties not重新 wrote will继续保留:
+Later calls only override properties they rewrote. Properties not rewritten will continue to be retained:
 
 ```rust
 use flor::macros::color;
@@ -98,11 +98,11 @@ let title = label("Title")
     .style(|style| style.text_color(color!("#2563eb")));
 ```
 
-Here `.class(...)` wrote font size and font weight, `.style(...)` only wrote text color, so final will simultaneously保留 font size, font weight and text color.
+Here `.class(...)` wrote font size and font weight, `.style(...)` only wrote text color, so final will simultaneously retain font size, font weight and text color.
 
 ## State Also Merges by Layer
 
-State prefix is also same rule. Normal state, hover, focus, active, disabled will分别 merge own properties:
+State prefix is also same rule. Normal state, hover, focus, active, disabled will separately merge their own properties:
 
 ```rust
 use flor::view::builder::ClassBuilder;
@@ -113,13 +113,13 @@ let item = label("Save")
     .class("hover:text-red-600");
 ```
 
-Final normal state uses `text-slate-700`. In hover state, `font-bold` will保留; text color is被 later `hover:text-red-600`覆盖.
+Final normal state uses `text-slate-700`. In hover state, `font-bold` will be retained; text color is overridden by the later `hover:text-red-600`.
 
 ## What's the Use
 
-Layer mechanism's purpose is not to make writing变复杂, but to let you can拆 configuration to suitable position.
+Layer mechanism's purpose is not to make writing more complex, but to let you split configuration to suitable positions.
 
-You can first write a set of基础 configuration, then later重新 specify certain properties:
+You can first write a set of base configuration, then later re-specify certain properties:
 
 ```rust
 let item = label("Item")
@@ -127,9 +127,9 @@ let item = label("Item")
     .class("p-4");
 ```
 
-Here later `p-4` only覆盖 padding, `text-slate-700` still保留.
+Here later `p-4` only overrides padding, `text-slate-700` is still retained.
 
-You can also把某 property单独交给 reactive signal control, rather than把整串 class or整组 style都塞进 `if else`里拼接:
+You can also hand a certain property individually to reactive signal control, rather than stuffing the entire class string or entire style group into `if else` concatenation:
 
 ```rust
 use flor::signal::{create_signal, Read};
@@ -151,10 +151,10 @@ let panel = label("Details")
     });
 ```
 
-This way, static configuration still writes in `.class(...)`, only真正会变化 `display`放进 reactive `.layout(...)`. If把这些内容全部写成一个 dynamic string, usually会出现重复 class, complex branches and hard-to-maintain text拼接.
+This way, static configuration still writes in `.class(...)`, only the truly changing `display` goes into reactive `.layout(...)`. If putting all this content into one dynamic string, there will usually be repeated classes, complex branches and hard-to-maintain text concatenation.
 
-Layer mechanism also支撑了 higher-level widget封装: handler可以作为 parameter传入, chain-configured widget可以作为 return value继续传递. Specifically how to把基础 widget封装成 composite widget or business module, see [Framework DSL](/en/guide/use/framework-dsl).
+Layer mechanism also supports higher-level view encapsulation: handlers can be passed as parameters, chain-configured views can be passed on as return values. Specifically how to wrap base views into composite views or business modules, see [Framework DSL](/en/guide/use/framework-dsl).
 
-Maintaining end-user's usage experience is framework's核心目标之一. Layer mechanism is为了让 application code can清楚 express "which configurations are基础值, which configurations会覆盖, which configurations会响应变化", thereby减少为了实现交互状态而制造出来的 code噪音.
+Maintaining end-user's usage experience is one of the framework's core goals. Layer mechanism is to let application code clearly express "which configurations are base values, which configurations override, which configurations respond to changes", thereby reducing code noise created for implementing interactive states.
 
-Just remember one rule: different properties will merge, same property永远 later write覆盖前写.
+Just remember one rule: different properties will merge, same property always uses later write overrides earlier write.

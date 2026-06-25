@@ -2,9 +2,9 @@
 
 `#[derive(Resolver)]` is Flor's style parsing derive macro. It automatically generates Resolver type, chain methods, state variant support and reactive update capability for style enums.
 
-This macro has built-in widget state mechanism, mainly used for widget style system. It can work with [class system](/en/guide/use/builder/class), parse class names in `on_update_class` and update styles.
+This macro has built-in view state mechanism, mainly used for view style system. It can work with [class system](/en/guide/use/builder/class), parse class names in `on_update_class` and update styles.
 
-Widget authors only need to define style enum, derive macro will automatically generate all Resolver related code.
+View authors only need to define style enum, derive macro will automatically generate all Resolver related code.
 
 ## Minimal Usage
 
@@ -114,7 +114,7 @@ let resolver = LabelStyleResolver::new(view_id)
     .text_color(Color::RED);
 ```
 
-Read by current widget state when drawing:
+Read by current view state when drawing:
 
 ```rust
 let style = resolver.get_data_clone(control_state);
@@ -129,7 +129,7 @@ State inheritance rules:
 
 ## StyleBuilder
 
-Derive macro by default generates `StyleBuilder` trait implementation for widget, allows application side to modify styles through `.style(...)` method:
+Derive macro by default generates `StyleBuilder` trait implementation for view, allows application side to modify styles through `.style(...)` method:
 
 ```rust
 impl StyleBuilder<LabelStyleResolver> for Label {
@@ -317,13 +317,13 @@ pub enum Layout {
 }
 ```
 
-## Actual Usage in Widget
+## Actual Usage in View
 
-Following example shows Resolver's complete usage flow in widget.
+Following example shows Resolver's complete usage flow in view.
 
 ### Constructor
 
-Create Resolver when widget constructs, can pass custom calculation function:
+Create Resolver when view constructs, can pass custom calculation function:
 
 ```rust
 use flor::view::ViewId;
@@ -353,7 +353,7 @@ impl Label {
 
 ### on_measure
 
-Read style by current widget state when measuring:
+Read style by current view state when measuring:
 
 ```rust
 fn on_measure(
@@ -386,7 +386,7 @@ fn on_measure(
 
 ### on_draw
 
-Read style by widget state when drawing too:
+Read style by view state when drawing too:
 
 ```rust
 fn on_draw(
@@ -410,7 +410,7 @@ fn on_draw(
 
 ### on_update_class
 
-`on_update_class` is class system's entry. Widget parses class names and updates styles here:
+`on_update_class` is class system's entry. View parses class names and updates styles here:
 
 ```rust
 fn on_update_class(&mut self, control_state: ControlState, class: &str) -> Result<(), Error> {

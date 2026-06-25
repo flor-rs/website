@@ -123,7 +123,7 @@
         ]
       },
       {
-        "text": "Widget Development",
+        "text": "View Development",
         "items": [
           {
             "text": "ViewId",
@@ -155,8 +155,8 @@
             ]
           },
           {
-            "text": "Developing Widgets from Scratch",
-            "link": "/guide/control/create-widget"
+            "text": "Developing Views from Scratch",
+            "link": "/guide/control/create-view"
           }
         ]
       }

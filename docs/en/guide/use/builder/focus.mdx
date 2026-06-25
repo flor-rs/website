@@ -13,7 +13,7 @@ pub trait FocusIndexBuilder {
 
 ## focus_index
 
-`focus_index` adds widget to focus table, and sets its sort value in Tab order.
+`focus_index` adds view to focus table, and sets its sort value in Tab order.
 
 ```rust
 use flor::view::builder::{EventBuilder, FocusIndexBuilder};
@@ -28,13 +28,13 @@ let name = label("Name")
 let confirm = label("Confirm").focus_index(1);
 ```
 
-`0` is legal sort value, don't understand it as canceling focus. Smaller numbers are visited by Tab first. Same sort value can also work, final sorting will still include `ViewId` and virtual focus number; however using clear incrementing values for same group of widgets is easier to maintain.
+`0` is legal sort value, don't understand it as canceling focus. Smaller numbers are visited by Tab first. Same sort value can also work, final sorting will still include `ViewId` and virtual focus number; however using clear incrementing values for same group of views is easier to maintain.
 
-Not writing `focus_index` means not joining focus table. Such widgets won't be selected by Tab, also won't become widget-level [`on_key_*`](/en/api/handler#keyboard-events) focus target.
+Not writing `focus_index` means not joining focus table. Such views won't be selected by Tab, also won't become view-level [`on_key_*`](/en/api/handler#keyboard-events) focus target.
 
 ## focus_scope
 
-`focus_scope` provides a sort offset for current widget and its subtree. It's suitable for splitting page into several areas, letting each area internally number from `0`.
+`focus_scope` provides a sort offset for current view and its subtree. It's suitable for splitting page into several areas, letting each area internally number from `0`.
 
 ```rust
 use flor::view::builder::FocusIndexBuilder;
@@ -57,7 +57,7 @@ let content = div(views![
 
 Final sort values above are:
 
-| Widget | Local Writing | Final Sort Value |
+| View | Local Writing | Final Sort Value |
 | --- | --- | --- |
 | Tool 1 | `100 + 0` | `100` |
 | Tool 2 | `100 + 1` | `101` |
@@ -66,4 +66,4 @@ Final sort values above are:
 
 `focus_scope` can nest, parent offset will continue accumulating to subtree.
 
-Note: builder's `focus_scope(u32)` only affects sorting, doesn't limit Tab's runtime range. Popup layer, Modal这类 focus isolation scenarios use `ViewId::push_focus_scope()` and `ViewId::pop_focus_scope()`, mechanism explanation see [Focus Mechanism](/en/guide/use/focus#runtime-scope).
+Note: builder's `focus_scope(u32)` only affects sorting, doesn't limit Tab's runtime range. For popup layer, modal and similar focus isolation scenarios, use `ViewId::push_focus_scope()` and `ViewId::pop_focus_scope()`, mechanism explanation see [Focus Mechanism](/en/guide/use/focus#runtime-scope).

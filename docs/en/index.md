@@ -22,7 +22,7 @@ features:
     icon: 🔗
     link: /guide/use/signal
   - title: Declarative DSL
-    details: Declarative UI DSL, atomic class style parsing support, terminal application experience is simple, complexity absorbed by framework/widget authors.
+    details: Declarative UI DSL, atomic class style parsing support, terminal application experience is simple, complexity absorbed by framework/view authors.
     icon: 🎨
     link: /guide/use/framework-dsl
   - title: Multi-Window Support
@@ -30,7 +30,7 @@ features:
     icon: 🖥️
     link: /guide/use/window
   - title: High API Consistency
-    details: Unified builder pattern, consistent event handling, clear widget lifecycle, easy to learn and use.
+    details: Unified builder pattern, consistent event handling, clear view lifecycle, easy to learn and use.
     icon: 📚
     link: /guide/startup
   - title: AI-Friendly Design

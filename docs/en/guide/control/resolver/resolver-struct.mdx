@@ -1,8 +1,8 @@
 # Resolver Struct
 
-> This page doesn't need deliberate learning, just read to have an impression. When developing widgets, directly use [Resolver Derive Macro](/en/guide/control/resolver/resolver-derive) is enough.
+> This page doesn't need deliberate learning, just read to have an impression. When developing views, directly use [Resolver Derive Macro](/en/guide/control/resolver/resolver-derive) is enough.
 
-`Resolver` is Flor framework's internal style/layout resolver, used to manage state variants, unit conversion and calculation cache. Widget authors usually don't need to directly operate `Resolver`, instead through [Resolver Derive Macro](/en/guide/control/resolver/resolver-derive) automatically generate implementation.
+`Resolver` is Flor framework's internal style/layout resolver, used to manage state variants, unit conversion and calculation cache. View authors usually don't need to directly operate `Resolver`, instead through [Resolver Derive Macro](/en/guide/control/resolver/resolver-derive) automatically generate implementation.
 
 ```rust
 use flor::view::resolver::Resolver;
@@ -17,7 +17,7 @@ use flor::view::resolver::Resolver;
 - Cache calculation results, avoid repeated calculation
 - Support multi-layer style stacking (layer)
 
-Widget authors only need to know: `Resolver` will automatically select corresponding style variant based on current widget state (Normal, Hover, Focus, Active, Disabled), and calculate final result.
+View authors only need to know: `Resolver` will automatically select corresponding style variant based on current view state (Normal, Hover, Focus, Active, Disabled), and calculate final result.
 
 ## new_with_compute_func
 
@@ -60,14 +60,14 @@ impl LayoutResolver {
 
 When style variant changes, cache will be cleared. Getting data will automatically trigger calculation.
 
-Widget authors don't need to care about cache details, only need to know: multiple calls to `get_data_clone` or `get_data_borrow` won't repeat calculation.
+View authors don't need to care about cache details, only need to know: multiple calls to `get_data_clone` or `get_data_borrow` won't repeat calculation.
 
 ## Usage Method
 
-Widget authors shouldn't manually create `Resolver`. Correct way is:
+View authors shouldn't manually create `Resolver`. Correct way is:
 
 1. Define style enum, for example `Layout` or custom style type
 2. Use `#[derive(Resolver)]` derive macro to automatically generate `Resolver` implementation
-3. Call generated `new` method in widget constructor
+3. Call generated `new` method in view constructor
 
 See [Resolver Derive Macro](/en/guide/control/resolver/resolver-derive) for details.

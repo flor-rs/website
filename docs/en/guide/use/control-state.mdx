@@ -1,6 +1,6 @@
-# Widget State
+# View State
 
-Flor framework has implemented a complete widget state system to manage widget's state performance in different interaction scenarios.
+Flor framework has implemented a complete view state system to manage a view's state performance in different interaction scenarios.
 
 ## ControlState Enum Definition
 
@@ -18,13 +18,13 @@ pub enum ControlState {
 
 ## State Model Design
 
-Flor framework defines five basic states for widgets:
+Flor framework defines five basic states for views:
 
-- **Normal**: Normal state, widget's default state
-- **Focus**: Focus state, when widget gets keyboard focus
-- **Hover**: Hover state, when mouse hovers over widget
-- **Active**: Active state, when widget is pressed or clicked
-- **Disabled**: Disabled state, when widget is not interactive
+- **Normal**: Normal state, a view's default state
+- **Focus**: Focus state, when a view gets keyboard focus
+- **Hover**: Hover state, when mouse hovers over a view
+- **Active**: Active state, when a view is pressed or clicked
+- **Disabled**: Disabled state, when a view is not interactive
 
 ## State Classification
 
@@ -34,15 +34,15 @@ Among these states, they can be divided into two categories:
 
 Enhanced states are states added on top of base state, won't prevent user interaction:
 
-- **Focus**: Supplementary state, indicates widget got focus
+- **Focus**: Supplementary state, indicates a view got focus
 - **Hover**: Supplementary state, indicates mouse hover
-- **Active**: Supplementary state, indicates widget is activated
+- **Active**: Supplementary state, indicates a view is activated
 
 ### Terminal State
 
-Terminal state will prevent user interaction, widget enters unavailable state:
+Terminal state will prevent user interaction, a view enters unavailable state:
 
-- **Disabled**: Independent state, widget is completely disabled
+- **Disabled**: Independent state, a view is completely disabled
 
 ## State Inheritance Relationship
 
@@ -61,9 +61,9 @@ Normal
 | State | Inherits From | Reason |
 |------|--------|------|
 | Normal | None | Base state, foundation for all other states |
-| Focus | Normal | Focus is just supplementary, doesn't change widget's basic behavior |
+| Focus | Normal | Focus is just supplementary, doesn't change a view's basic behavior |
 | Hover | Normal | Hover is just supplementary, provides visual feedback |
-| Active | Hover -> Focus -> Normal | Active is usually continuation of Hover, user presses widget |
+| Active | Hover -> Focus -> Normal | Active is usually continuation of Hover, user presses the view |
 | Disabled | Doesn't inherit any state | Disabled should be completely isolated, prevent all interactions |
 
 ### Inheritance Chain Explanation
@@ -75,21 +75,21 @@ Normal
 
 **Disabled's special handling**:
 - Disabled state is completely independent, doesn't inherit any other state's styles
-- In disabled state, widget displays unavailable visual effect
+- In disabled state, a view displays unavailable visual effect
 - All interaction events are ignored
 
 ## State Transition
 
-Transitions between widget states follow these rules:
+Transitions between view states follow these rules:
 
-1. **Normal → Focus**: Widget gets keyboard focus
-2. **Normal → Hover**: Mouse enters widget area
+1. **Normal → Focus**: A view gets keyboard focus
+2. **Normal → Hover**: Mouse enters the view area
 3. **Hover → Active**: User presses mouse button
-4. **Active → Hover**: User releases mouse button (still in widget area)
-5. **Any state → Disabled**: Widget is disabled
-6. **Disabled → Normal**: Widget is enabled
+4. **Active → Hover**: User releases mouse button (still in the view area)
+5. **Any state → Disabled**: A view is disabled
+6. **Disabled → Normal**: A view is enabled
 
-> Framework built-in system's state transition doesn't represent final widget's behavior pattern
+> Framework built-in system's state transition doesn't represent the final view's behavior pattern
 
 ## Practical Application
 
@@ -116,4 +116,4 @@ Flor supports using following state prefixes to define conditional styles:
 - `active:`: Active state
 - `disabled:`: Disabled state
 
-This state management approach allows you to flexibly control widget's performance under different interaction states, providing good user experience.
+This state management approach allows you to flexibly control a view's performance under different interaction states, providing good user experience.

@@ -25,7 +25,7 @@ Lower layer numbers mean more foundational; crates at the same layer don't depen
 flor = { version = "0.1.0", features = ["direct2d", "tiny-skia", "layout-flex", "class"] }
 ```
 
-Below are features exposed to users by `flor` crate. Widget libraries may forward some of these features, but framework-side names are as listed here. For detailed usage of platform capabilities, see [Framework Capabilities](/en/guide/features/overview).
+Below are features exposed to users by `flor` crate. View libraries may forward some of these features, but framework-side names are as listed here. For detailed usage of platform capabilities, see [Framework Capabilities](/en/guide/features/overview).
 
 ### Rendering Backends
 
@@ -90,7 +90,7 @@ Applications usually directly enable `direct2d`, `opengl` or `tiny-skia`. Don't 
 
 ### What you need to know for simply using the framework
 
-By default you'll use it with a widget library, prioritize these contents:
+By default you'll use it with a view library, prioritize these contents:
 
 - Initialization and message loop
 - [Window Creation and Control](/en/guide/use/window)
@@ -98,11 +98,11 @@ By default you'll use it with a widget library, prioritize these contents:
 - Use class or declarative builder to configure layout and style
 - Enable framework features as needed
 
-### What you need to know for developing widgets
+### What you need to know for developing views
 
 By default you already know how to use Flor to write applications, then continue with these contents:
 
-- `View trait`: Trait that new widgets need to implement. Framework manages lifecycle, events, drawing etc. flows.
-- `ViewId`: Widget's unique ID, also provides runtime access entries for parent-child relationships, focus, scroll, visibility state, redraw etc.
-- `Resolver` attribute macro and struct: Generates widget-state property template code through enums.
-- `Render API`: Framework provides a drawing API sufficient for most widget drawing; when advanced capabilities are needed, get corresponding handle by backend for custom processing.
+- `View trait`: Trait that new views need to implement. Framework manages lifecycle, events, drawing etc. flows.
+- `ViewId`: View's unique ID, also provides runtime access entries for parent-child relationships, focus, scroll, visibility state, redraw etc.
+- `Resolver` attribute macro and struct: Generates view-state property template code through enums.
+- `Render API`: Framework provides a drawing API sufficient for most view drawing; when advanced capabilities are needed, get corresponding handle by backend for custom processing.

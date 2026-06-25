@@ -1,10 +1,10 @@
 # Transform Builder
 
-Transform Builder is used to set declarative `Transform2D` for widgets. It affects widget itself and its child widgets' drawing and hit testing, but doesn't change position and size calculated by Taffy layout.
+Transform Builder is used to set declarative `Transform2D` for views. It affects view itself and its child views' drawing and hit testing, but doesn't change position and size calculated by Taffy layout.
 
 ## Basic Writing
 
-After importing `TransformBuilder`, all widgets implementing `View` can call `.transform(...)`.
+After importing `TransformBuilder`, all views implementing `View` can call `.transform(...)`.
 
 ```rust
 use flor::types::Transform2D;
@@ -104,8 +104,8 @@ use flor::types::Transform2D;
 
 ## Mechanism Explanation
 
-`.transform(...)` will create a reactive updater. During initialization will immediately calculate `Transform2D` once, and call current widget's `ViewId::set_transform(transform)`; afterwards when signal depended by closure updates, will write new transform again and request redraw.
+`.transform(...)` will create a reactive updater. During initialization will immediately calculate `Transform2D` once, and call current view's `ViewId::set_transform(transform)`; afterwards when signal depended by closure updates, will write new transform again and request redraw.
 
-Runtime transform is stored in `VIEW_STORAGE.transform`. Layout refresh phase will calculate accumulated transform, drawing phase will `push_transform`, hit testing will use inverse matrix to convert window coordinates back to widget local coordinates.
+Runtime transform is stored in `VIEW_STORAGE.transform`. Layout refresh phase will calculate accumulated transform, drawing phase will `push_transform`, hit testing will use inverse matrix to convert window coordinates back to view local coordinates.
 
-If matrix is non-invertible, for example scale to `0.0`, hit testing cannot convert window coordinates back to local coordinates, this widget branch will be skipped. In animation don't scale interactive widgets to non-invertible matrix.
+If matrix is non-invertible, for example scale to `0.0`, hit testing cannot convert window coordinates back to local coordinates, this view branch will be skipped. In animation don't scale interactive views to non-invertible matrix.

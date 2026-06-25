@@ -1,8 +1,8 @@
-# Developing a Switch Widget from Scratch
+# Developing a Switch View from Scratch
 
-This chapter will guide you through implementing a complete `Switch` widget from scratch. Through this process, you will master all core aspects of widget development: defining style enums, implementing the `View` trait, drawing, measuring, supporting atomic classes, and responding to mouse events.
+This chapter will guide you through implementing a complete `Switch` view from scratch. Through this process, you will master all core aspects of view development: defining style enums, implementing the `View` trait, drawing, measuring, supporting atomic classes, and responding to mouse events.
 
-`Switch` is an ideal learning case: it has "on/off" states, requires drawing a track and thumb, needs to respond to clicks, and can be customized with atomic classes for colors and sizes. After completing this chapter, you can follow the same pattern to develop your own widgets.
+`Switch` is an ideal learning case: it has "on/off" states, requires drawing a track and thumb, needs to respond to clicks, and can be customized with atomic classes for colors and sizes. After completing this chapter, you can follow the same pattern to develop your own views.
 
 ## Final Effect Preview
 
@@ -26,7 +26,7 @@ switch(enabled)
 
 ## Step 1: Create File
 
-Create a new file in your widget library crate:
+Create a new file in your view library crate:
 
 ```
 flor-lys/crates/flor-lys/src/switch.rs
@@ -84,19 +84,19 @@ pub enum SwitchStyle {
 
 ---
 
-## Step 3: Define Widget Struct
+## Step 3: Define View Struct
 
 ```rust
 use flor::view::ViewId;
 use flor::signal::RwSignal;
 
-/// Switch widget
+/// Switch view
 ///
 /// Contains a bool signal to control on/off state.
 /// All switches hold their own style resolver.
 #[derive(Debug)]
 pub struct Switch {
-    /// Widget unique ID, framework manages widget tree through it
+    /// View unique ID, framework manages view tree through it
     view_id: ViewId,
     /// Current on/off state (reactively updated by create_updater)
     enabled: bool,
@@ -128,7 +128,7 @@ impl View for Switch {
     }
 
     fn tag(&self) -> &str {
-        // Debug identifier, just return the widget name for now
+        // Debug identifier, just return the view name for now
         "Switch"
     }
 }
@@ -158,11 +158,11 @@ impl View for Switch {
 }
 ```
 
-> **Reactive Principle**: The constructor uses `create_updater` to register a `bool` update callback. When external code modifies the `enabled` signal (e.g., `enabled.set(true)`), `create_updater` detects the change and automatically calls `view_id.update_state(Box::new(new_value))`, ultimately triggering `on_update_state` here. You don't need to manually pass signals to the widget.
+> **Reactive Principle**: The constructor uses `create_updater` to register a `bool` update callback. When external code modifies the `enabled` signal (e.g., `enabled.set(true)`), `create_updater` detects the change and automatically calls `view_id.update_state(Box::new(new_value))`, ultimately triggering `on_update_state` here. You don't need to manually pass signals to the view.
 
 ### 4.3 on_measure — Measuring
 
-`on_measure` tells the layout system how much space this widget needs. For `Switch`, size is primarily determined by style:
+`on_measure` tells the layout system how much space this view needs. For `Switch`, size is primarily determined by style:
 
 ```rust
 use flor::error::Error;
@@ -196,12 +196,12 @@ impl View for Switch {
 
 **Key Points**:
 - `known_dimensions` is the known size constraint passed down from the parent container. If the parent sets fixed width/height, you'll receive `Some(...)` here.
-- Prioritize using `known_dimensions`, only use the widget's default value when not available.
-- `self.style.get_data_borrow(control_state)` gets the computed style for the current widget state.
+- Prioritize using `known_dimensions`, only use the view's default value when not available.
+- `self.style.get_data_borrow(control_state)` gets the computed style for the current view state.
 
 ### 4.4 on_draw — Drawing
 
-This is the most core method in widget development. `Switch` needs to draw a track (background) and thumb (circle):
+This is the most core method in view development. `Switch` needs to draw a track (background) and thumb (circle):
 
 ```rust
 use flor::base::graphics::RenderContext;
@@ -386,7 +386,7 @@ impl View for Switch {
 }
 ```
 
-> You could also use `on_click` here. The difference is `on_click` requires down and up to hit the same widget, while `on_button_down` triggers immediately on press. For switches, `on_button_down` provides a more immediate experience.
+> You could also use `on_click` here. The difference is `on_click` requires down and up to hit the same view, while `on_button_down` triggers immediately on press. For switches, `on_button_down` provides a more immediate experience.
 
 ---
 
@@ -398,7 +398,7 @@ use flor::view::resolver::LayoutResolver;
 use flor::view::builder::ViewBuilder;
 
 impl Switch {
-    /// Create switch widget
+    /// Create switch view
     pub fn new(enabled: RwSignal<bool>) -> Self {
         // Create ViewId, and create LayoutResolver
         let view_id = ViewId::new_with_layout(|view_id| {
@@ -429,7 +429,7 @@ pub fn switch(enabled: RwSignal<bool>) -> Switch {
 ```
 
 **Constructor Key Points**:
-- `ViewId::new_with_layout` creates a `LayoutResolver` for the widget.
+- `ViewId::new_with_layout` creates a `LayoutResolver` for the view.
 - `create_updater` is key: it receives two closures—the first reads the signal value (establishing reactive tracking), the second triggers `on_update_state` through `view_id.update_state` when the value changes. The return value is the signal's current value, stored as `enabled: bool`.
 - `enabled_signal` retains the signal reference for write operations in `on_button_down`.
 - `computed_switch_style` function is auto-generated by the `#[derive(Resolver)]` macro, you **don't need to write it manually**.
@@ -743,7 +743,7 @@ switch(notifications)
 ```rust
 let dark_mode = create_signal(false);
 
-// Other widgets can read the dark_mode signal to respond
+// Other views can read the dark_mode signal to respond
 let bg_color = move || {
     if dark_mode.get() {
         Color::from_hex_str("#1a1a2e").unwrap()
@@ -772,18 +772,18 @@ switch(dark_mode)
 
 ---
 
-## Widget Development Checklist
+## View Development Checklist
 
-Review the entire process, developing a Flor widget requires completing these steps:
+Review the entire process, developing a Flor view requires completing these steps:
 
 1. **Define Style Enum** — Use `#[derive(Resolver)]` to declare all configurable style properties.
-2. **Define Widget Struct** — Hold `view_id`, state fields, and `style resolver`.
+2. **Define View Struct** — Hold `view_id`, state fields, and `style resolver`.
 3. **Implement `View` trait**:
    - `view_id()` — Return the `view_id` in the struct.
    - `tag()` — Return the debug label name.
    - `on_update_state()` — Handle style updates passed through `update_state`.
-   - `on_measure()` — Widgets with natural size need to implement this, return the size the widget needs.
-   - `on_draw()` — Core drawing method, read computed style and widget state to draw.
+   - `on_measure()` — Views with natural size need to implement this, return the size the view needs.
+   - `on_draw()` — Core drawing method, read computed style and view state to draw.
    - `on_update_class()` — Parse atomic class strings, convert to style updates.
    - Override mouse/keyboard event handling as needed (`on_button_down`, `on_click`, etc.).
 4. **Write Constructor** — Create `ViewId`, `LayoutResolver`, `StyleResolver`, use `create_updater` to build reactive dependency, `computed_xxx` function is auto-generated by macro.

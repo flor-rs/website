@@ -71,7 +71,7 @@ write.set(read.get() + 1);
 
 ## Constant Signal
 
-Constant signal is a practical capability: it allows API to simultaneously accept fixed values and reactive values. For example, widget property can pass `"Hello"`, or pass a closure reading signal.
+Constant signal is a practical capability: it allows API to simultaneously accept fixed values and reactive values. For example, view property can pass `"Hello"`, or pass a closure reading signal.
 
 `ConstSignal<T>` doesn't enter global runtime, doesn't establish subscription, `destroy()` is also empty operation. It just wraps a normal value into a reader implementing `Read<T>`.
 
@@ -214,7 +214,7 @@ Note: `on_change` won't be called during initial calculation, only called after 
 
 Normal business code usually just uses `create_updater`. `create_updater_with_id` is mainly for framework internal use, it returns `(Id, R)`, where `Id` is effect id, `R` is initial value.
 
-Framework internally uses it to delay some UI effects until after widget activation then enqueue, for example class, layout, transform and other builders. Reason for delay is because during layout assembly, widget's `ViewId` may not have been mounted to window and parent widget. After widget activation, putting effect id into update queue can let these UI updates execute in complete widget relationship.
+Framework internally uses it to delay some UI effects until after view activation then enqueue, for example class, layout, transform and other builders. Reason for delay is because during layout assembly, view's `ViewId` may not have been mounted to window and parent view. After view activation, putting effect id into update queue can let these UI updates execute in complete view relationship.
 
 ## List Signal
 
@@ -331,11 +331,11 @@ batch(|| {
 
 `batch` is thread-local, only affects current thread. Signal writes in other threads won't enter current thread's batch processing collection. If closure panics, `batch` will restore batch processing state, then continue propagating panic outward.
 
-## Integration with UI Widgets
+## Integration with UI Views
 
-> This chapter belongs to "Widget Development" content. If don't need to develop widgets, quick understanding is enough.
+> This chapter belongs to "View Development" content. If don't need to develop views, quick understanding is enough.
 
-Flor UI widgets usually bind reactive values through `create_updater`.
+Flor UI views usually bind reactive values through `create_updater`.
 
 Take `Label::new` pattern as example:
 
@@ -372,7 +372,7 @@ title.set("World".to_string());
 
 Workflow:
 
-1. `create_updater` first executes `compute` once, gets widget initial value.
+1. `create_updater` first executes `compute` once, gets view initial value.
 2. When reading signal in `compute`, current effect id is recorded in thread-local `SCOPE`.
 3. `Read::track()` or `ListRead::track()` subscribes current effect to read signal.
 4. When signal writes, runtime adds corresponding signal id to update queue.
@@ -420,9 +420,9 @@ For complete function signatures and trait lists, see [Signal API Reference](/en
 
 All value signals and list signals are globally alive. `RwSignal<T>`, `ReadSignal<T>`, `WriteSignal<T>`, `RwListSignal<T>`, `ReadListSignal<T>`, `WriteListSignal<T>` are all `Copy` handles, copying handle won't copy underlying value, won't change lifetime.
 
-Global alive is Flor's tradeoff to keep signal handles `Copy` usable: after signal created, it lives in global runtime, dropping some handle won't release underlying data. Flor is not only suitable for large even super large GUI, also suitable for small tool programs; in lightweight programs, Flor's compiled size performance is also one of core design goals. For small tools, simple windows, stable interface structure, window lifetime close to process lifetime programs, letting signals naturally回收 with process end is usually one of recommended writing styles, memory and performance impact is small.
+Global alive is Flor's tradeoff to keep signal handles `Copy` usable: after signal created, it lives in global runtime, dropping some handle won't release underlying data. Flor is not only suitable for large even super large GUI, also suitable for small tool programs; in lightweight programs, Flor's compiled size performance is also one of core design goals. For small tools, simple windows, stable interface structure, window lifetime close to process lifetime programs, letting signals naturally be recycled with process end is usually one of recommended writing styles, memory and performance impact is small.
 
-`destroy()` is more suitable for dynamic resources with明确 ending lifetime, for example windows, pages, panels that can be repeatedly created and destroyed, or temporary signals with large quantity in heavy, super heavy GUI. After using `destroy()`, then combine with `try_get()`, `try_set()`, `try_update()` to handle possibly invalid handles.
+`destroy()` is more suitable for dynamic resources with clear ending lifetime, for example windows, pages, panels that can be repeatedly created and destroyed, or temporary signals with large quantity in heavy, super heavy GUI. After using `destroy()`, then combine with `try_get()`, `try_set()`, `try_update()` to handle possibly invalid handles.
 
 ```rust
 use flor::signal::{create_signal, Read, Signal, Write};
@@ -451,9 +451,9 @@ Flor's read-write capability is provided through traits. `ReadSignal<T>` only im
 
 Read-write split expresses business semantics, not security boundary or permission isolation. This sentence doesn't mean reader has writer's permission: `ReadSignal<T>` itself has no write methods, when passed by `Read<T>` constraint can only read; `WriteSignal<T>` itself has no read methods, when passed by `Write<T>` constraint can only write. Read is read, write is write, can maintain clarity in business code and source code search.
 
-Therefore, recommend放心 using corresponding signal types to express business access boundaries: places only needing read pass `ReadSignal<T>`, places only needing write pass `WriteSignal<T>`, when need both then pass `RwSignal<T>`. Such split can make API, call points and code reading all clearer.
+Therefore, feel free to use corresponding signal types to express business access boundaries: places only needing read pass `ReadSignal<T>`, places only needing write pass `WriteSignal<T>`, when need both then pass `RwSignal<T>`. Such split can make API, call points and code reading all clearer.
 
-Meanwhile, Flor won't let this semantic split hold back usage. When确实 need write, code will appear `as_write()`, `split()` or writer parameter, reader can clearly see here got new access capability; under normal paths, reader still won't have write permission.
+Meanwhile, Flor won't let this semantic split hold back usage. When you really need write, code will appear `as_write()`, `split()` or writer parameter, reader can clearly see here got new access capability; under normal paths, reader still won't have write permission.
 
 ## Debug Label
 
@@ -469,7 +469,7 @@ count.set_label("main_counter");
 items.set_label("main_items");
 ```
 
-Labels are only written to runtime in `debug_assertions` or when `signal-tracing` feature enabled. Currently this part mainly provides runtime-side label recording, complete visual debugging experience still needs to wait for `devtools` related capability完善; therefore it's more suitable as foundation capability for subsequent tracing and debugging tools, rather than already completed user-side debugging panel.
+Labels are only written to runtime in `debug_assertions` or when `signal-tracing` feature enabled. Currently this part mainly provides runtime-side label recording, complete visual debugging experience still needs to wait for `devtools` related capability to mature; therefore it's more suitable as foundation capability for subsequent tracing and debugging tools, rather than already completed user-side debugging panel.
 
 ## Deep: Runtime Mechanism
 
@@ -497,4 +497,4 @@ Dependency tracking relies on thread-local `SCOPE`:
 
 `batch` uses thread-local `BATCH` to collect signal ids. After batch processing ends, these ids are uniformly added to global update queue.
 
-Current implementation won't actively clear old dependencies before each effect re-execution. For dynamic branches where dependency set frequently changes, should尽量 keep read range stable, avoid long-term accumulating no longer needed subscriptions.
+Current implementation won't actively clear old dependencies before each effect re-execution. For dynamic branches where dependency set frequently changes, should try to keep read range stable, avoid long-term accumulating no longer needed subscriptions.

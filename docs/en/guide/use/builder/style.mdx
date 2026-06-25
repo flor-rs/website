@@ -1,6 +1,6 @@
 # Style Builder
 
-Style Builder's entry is `.style(|style| { ... })`. It's used for manually writing widget style's chain configuration, suitable when you want to directly call widget-provided strongly-typed style methods, instead of writing style as class string.
+Style Builder's entry is `.style(|style| { ... })`. It's used for manually writing view style's chain configuration, suitable when you want to directly call view-provided strongly-typed style methods, instead of writing style as class string.
 
 ```rust
 use flor::macros::color;
@@ -21,8 +21,8 @@ When using `.style(...)` usually need two imports:
 
 | Import | Purpose |
 | --- | --- |
-| `StyleBuilder` | Let widget have `.style(...)` method. |
-| Widget's own `*StyleResolverExt` | Let `style` in closure have specific chain methods. |
+| `StyleBuilder` | Let view have `.style(...)` method. |
+| View's own `*StyleResolverExt` | Let `style` in closure have specific chain methods. |
 
 For example `Label`'s style methods come from `LabelStyleResolverExt`:
 
@@ -37,11 +37,11 @@ let label = label("Status")
 
 `.style(...)`'s closure must return modified `style`. If want to continuously set multiple values, just chain call.
 
-## Not All Widgets Have It
+## Not All Views Have It
 
-`.style(...)` is for widget to manually expose style chain capability. Whether supports `.style(...)`, what methods `style` in closure has, are all decided by specific widget.
+`.style(...)` is for view to manually expose style chain capability. Whether supports `.style(...)`, what methods `style` in closure has, are all decided by specific view.
 
-For example `Label` can have `font_size(...)`, `text_color(...)`这类 methods; `Button` can have button variant, color, rounded corner and other methods. Specific methods should see that widget's documentation in widget library.
+For example `Label` can have `font_size(...)`, `text_color(...)` and similar methods; `Button` can have button variant, color, rounded corner and other methods. Specific methods should see that view's documentation in view library.
 
 ```rust
 use flor::macros::color;
@@ -56,11 +56,11 @@ let save = button("Save")
     });
 ```
 
-If some widget didn't implement style builder, compiler will提示 that method is not available when calling `.style(...)`.
+If some view didn't implement style builder, the compiler will indicate that the method is not available when calling `.style(...)`.
 
 ## State Style
 
-Style builder can set style by widget state. Common state methods include `normal()`, `hover()`, `focus()`, `active()`, `disabled()`.
+Style builder can set style by view state. Common state methods include `normal()`, `hover()`, `focus()`, `active()`, `disabled()`.
 
 ```rust
 use flor::macros::color;
@@ -80,10 +80,10 @@ This code means: normal state uses dark gray, hover state uses blue.
 
 ## Relationship with class / layout
 
-`.style(...)` is widget style's strongly-typed writing. It's suitable when you already know target widget supports which style methods, and hope to get compile-time check.
+`.style(...)` is view style's strongly-typed writing. It's suitable when you already know target view supports which style methods, and hope to get compile-time check.
 
 `.layout(...)` is layout's strongly-typed writing, responsible for display, size, spacing, Flex/Grid and other layout properties.
 
-`.class(...)` is quick development string writing. Flor's design philosophy is: class can describe layout and style's arbitrary value expression, so can use one string of class to simultaneously set layout and widget style. Also because it's capability added for quick development, `class` is optional feature.
+`.class(...)` is quick development string writing. Flor's design philosophy is: class can describe layout and style's arbitrary value expression, so can use one string of class to simultaneously set layout and view style. Also because it's capability added for quick development, `class` is optional feature.
 
 All three can be used simultaneously; same configuration item uses later written value as standard.

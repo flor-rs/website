@@ -1,10 +1,10 @@
 # Z-Index Builder
 
-Z-Index Builder is used to set `z_index` for widgets. It only affects sibling node ordering under same parent widget, not global stacking context.
+Z-Index Builder is used to set `z_index` for views. It only affects sibling node ordering under same parent view, not global stacking context.
 
 ## Basic Writing
 
-After importing `ZIndexBuilder`, all widgets implementing `View` can call `.z_index(...)`.
+After importing `ZIndexBuilder`, all views implementing `View` can call `.z_index(...)`.
 
 ```rust
 use flor::view::builder::ZIndexBuilder;
@@ -52,7 +52,7 @@ let popup = label("Menu").class("z-100");
 
 `z-auto` will write `0`, `z-10` will write `10`. `z-*` is special item in layout class: it won't enter Taffy layout style, but directly update `ViewId`'s layer level value.
 
-If you already use `.z_index(...)` to dynamically control layer level, don't use `z-*` on same widget to express another fixed layer level, avoid subsequent updates互相 overriding.
+If you already use `.z_index(...)` to dynamically control layer level, don't use `z-*` on same view to express another fixed layer level, to avoid subsequent updates overriding each other.
 
 ## Suitable Scenarios
 
@@ -62,19 +62,19 @@ Common use is separating temporary content and normal content in same container:
 | --- | --- |
 | Popup menu | Give menu value higher than trigger button and normal content. |
 | Floating toolbar | Give toolbar stable high layer level value. |
-| Drag preview | During drag switch preview widget to higher layer level. |
+| Drag preview | During drag switch preview view to higher layer level. |
 | Normal list item | Keep default `0`, only raise when need floating or dragging. |
 
-Layer level only compares between sibling nodes. Two widgets with different parent widgets cannot do global covering only靠 `z_index`; need to put them into same sortable parent container, or adjust widget tree structure.
+Layer level only compares between sibling nodes. Two views with different parent views cannot achieve global covering solely through `z_index`; you need to put them into the same sortable parent container, or adjust the view tree structure.
 
 ## Mechanism Explanation
 
-`.z_index(...)` will create a reactive updater. During initialization will immediately calculate closure result once, and call current widget's `ViewId::set_z_index(value)`; afterwards when signal depended by closure updates, will write new layer level value again.
+`.z_index(...)` will create a reactive updater. During initialization will immediately calculate closure result once, and call current view's `ViewId::set_z_index(value)`; afterwards when signal depended by closure updates, will write new layer level value again.
 
 `ViewId::set_z_index` will:
 
 1. Write value to `VIEW_STORAGE.view_z_index`.
-2. Find current widget's parent widget.
-3. Re-sort parent widget's child list according to sibling widgets' respective `z_index()`.
+2. Find current view's parent view.
+3. Re-sort parent view's child list according to sibling views' respective `z_index()`.
 
-Widgets that haven't set layer level, `ViewId::z_index()` returns `0`.
+Views that haven't set layer level, `ViewId::z_index()` returns `0`.

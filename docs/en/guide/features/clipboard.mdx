@@ -1,6 +1,6 @@
 # Clipboard
 
-`clipboard` feature is used to enable system clipboard read/write capability. It适合 implement copy, paste, import/export temporary text等功能.
+`clipboard` feature is used to enable system clipboard read/write capability. It is suitable for implementing copy, paste, import/export of temporary text and similar functionality.
 
 ```toml
 [dependencies]
@@ -22,7 +22,7 @@ let text = clipboard.get_clipboard_text()?;
 println!("{text}");
 ```
 
-`Clipboard(None)` means not binding specific window. When need to associate clipboard operation with某 window, can pass `Some(window_id)`.
+`Clipboard(None)` means not binding specific window. When you need to associate clipboard operation with a given window, can pass `Some(window_id)`.
 
 ```rust
 use flor::base::platform::ClipboardApi;
@@ -34,7 +34,7 @@ clipboard.set_clipboard_text("from this window".to_string())?;
 
 ## Supported Content
 
-`ClipboardApi` provides two类 entries:
+`ClipboardApi` provides two kinds of entries:
 
 | Method | Purpose |
 | --- | --- |

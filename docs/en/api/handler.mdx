@@ -23,7 +23,7 @@ use flor::base::platform::ThemeMode;
 
 ## `EventBuilder`
 
-`EventBuilder` is implemented for all `V: ViewIdentity`. All methods save the handler and return `Self` for chain calls. Normal widgets, `ViewBox`, and values returned as `impl IntoView` can all keep using these methods.
+`EventBuilder` is implemented for all `V: ViewIdentity`. All methods save the handler and return `Self` for chain calls. Normal views, `ViewBox`, and values returned as `impl IntoView` can all keep using these methods.
 
 ```rust
 pub trait EventBuilder {
@@ -107,7 +107,7 @@ For example, the underlying type of `on_click` is `MouseHandler`. All four forms
 ```rust
 view.on_click(|view_id, key_state, mouse_position| { /* full arguments */ });
 view.on_click(|| { /* does not need event parameters */ });
-view.on_click(|view_id| { /* only cares about the widget */ });
+view.on_click(|view_id| { /* only cares about the view */ });
 view.on_click(|key_state, mouse_position| { /* omits ViewId */ });
 ```
 
@@ -132,7 +132,7 @@ view.on_click(clicked);
 view.on_click(Actions::open::<1>);
 ```
 
-If you accept and forward handlers in your own widget wrapper, do not go back to `impl Into<OnClickHandler>`. Keep the `Args` generic so callers can still use full arguments, no arguments, `ViewId` only, or without `ViewId`:
+If you accept and forward handlers in your own view wrapper, do not go back to `impl Into<OnClickHandler>`. Keep the `Args` generic so callers can still use full arguments, no arguments, `ViewId` only, or without `ViewId`:
 
 ```rust
 fn accept_click<Args>(handler: impl IntoEventHandler<OnClickHandler, Args>) -> OnClickHandler {
@@ -144,19 +144,19 @@ fn accept_click<Args>(handler: impl IntoEventHandler<OnClickHandler, Args>) -> O
 
 | API | Current Status |
 | --- | --- |
-| `on_mouse_move` | Dispatched. Target is the mouse-capturing widget or current hover widget |
+| `on_mouse_move` | Dispatched. Target is the mouse-capturing view or current hover view |
 | `on_mouse_enter` / `on_mouse_leave` | Dispatched. Triggered when hover target changes |
 | `on_button_down` / `on_button_up` | Dispatched. Left button down/up |
-| `on_click` | Dispatched. Synthesized when left button down/up hit the same widget |
+| `on_click` | Dispatched. Synthesized when left button down/up hit the same view |
 | `on_double_click` | Dispatched. Left button double click |
 | `on_right_button_down` / `on_right_button_up` | Dispatched. Right button down/up |
-| `on_right_button_click` | Dispatched. Synthesized when right button down/up hit the same widget |
+| `on_right_button_click` | Dispatched. Synthesized when right button down/up hit the same view |
 | `on_right_button_double_click` | Dispatched. Right button double click |
 | `on_middle_button_down` / `on_middle_button_up` | Dispatched. Middle button down/up |
 | `on_middle_button_double_click` | Dispatched. Middle button double click |
-| `on_key_down` / `on_key_up` | Dispatched. Target is current focus widget |
+| `on_key_down` / `on_key_up` | Dispatched. Target is current focus view |
 | `on_focus` / `on_blur` | Dispatched. Triggered by focus manager |
-| `on_create` | Dispatched. Triggered after window creates widget tree |
+| `on_create` | Dispatched. Triggered after window creates view tree |
 | `on_wheel_settings_changed` | Dispatched. Current mouse wheel messages go through this handler |
 | `on_drag_enter` / `on_drag_over` / `on_drag_leave` / `on_drop` | Dispatched, requires `drag-drop` feature |
 | `on_context_menu` | Has binding slot, currently no external dispatch entry in source |
@@ -494,9 +494,9 @@ Requires `drag-drop` feature.
 
 | Type | Description |
 | --- | --- |
-| `ViewId` | ID of the target widget that triggered the event |
+| `ViewId` | ID of the target view that triggered the event |
 | `KeyState` | Mouse button and modifier key state |
-| `MousePosition` | Mouse coordinates. Regular mouse hit events use target widget local coordinates; wheel and drag-drop currently use window client area coordinates |
+| `MousePosition` | Mouse coordinates. Regular mouse hit events use target view local coordinates; wheel and drag-drop currently use window client area coordinates |
 | `KeyCode` | Key enumeration. Common keys include letters, numbers, arrow keys, function keys, `Enter`, `Escape`, `Tab`, `Backspace`, `Space`, `Delete` |
 | `HandleResult` | Keyboard event handling result, `Handled` means processed, `Default` means default processing |
 | `ScrollAxis` | `Vertical` or `Horizontal` |

@@ -1,6 +1,6 @@
 # Theme Change
 
-`theme-change` feature is used to enable system theme change related types and event builder. It适合 when system switches from light mode to dark mode, update application theme or rebuild related styles.
+`theme-change` feature is used to enable system theme change related types and event builder. It is suitable for when the system switches from light mode to dark mode, updating the application theme or rebuilding related styles.
 
 ```toml
 [dependencies]
@@ -32,4 +32,4 @@ let root = label("Theme")
 | `ThemeMode::Light` | Light mode. |
 | `ThemeMode::Dark` | Dark mode. |
 
-Complete signature and current dispatch status see [Handler API's Theme Change Events](/en/api/handler#主题变化事件). If you only need normal widget state styles, don't need to enable this feature; it faces system theme change.
+Complete signature and current dispatch status see [Handler API's Theme Change Events](/en/api/handler#theme-change-events). If you only need normal view state styles, don't need to enable this feature; it faces system theme change.

@@ -78,11 +78,11 @@ text-[#0f172a]
 aspect-[16/9]
 ```
 
-The parser removes the outer `[` and `]`, then parses the value according to the corresponding property's syntax. Brackets are not supported for all classes; check the specific class documentation or widget implementation.
+The parser removes the outer `[` and `]`, then parses the value according to the corresponding property's syntax. Brackets are not supported for all classes; check the specific class documentation or view implementation.
 
 ## Length Values
 
-Layout classes and some widget style classes use unified length parsing.
+Layout classes and some view style classes use unified length parsing.
 
 | Syntax | Example | Description |
 | --- | --- | --- |
@@ -116,11 +116,11 @@ Different properties support different keywords. Common keywords include:
 | `screen` | Current window client area width or height. |
 | `fit` / `min` / `max` | Treated as auto in current size parsing. |
 
-For the scope of layout class support for these keywords, see [Layout Class Syntax](/en/api/layout-class). For widget style class support, see the widget library documentation for specific widgets.
+For the scope of layout class support for these keywords, see [Layout Class Syntax](/en/api/layout-class). For view style class support, see the view library documentation for specific views.
 
 ## Color Values
 
-Widget style classes using Flor's shared color parsing typically support:
+View style classes using Flor's shared color parsing typically support:
 
 | Syntax | Example |
 | --- | --- |
@@ -129,11 +129,11 @@ Widget style classes using Flor's shared color parsing typically support:
 | Bracket hex | `[#0f172a]` |
 | Tailwind palette | `slate-900`, `blue-600`, `red-500` |
 
-Whether color parsing is used for a specific class is determined by the widget. For example, whether `text-blue-600` or `bg-slate-100` works depends on whether the current widget implements the corresponding style class.
+Whether color parsing is used for a specific class is determined by the view. For example, whether `text-blue-600` or `bg-slate-100` works depends on whether the current view implements the corresponding style class.
 
 ## Shared Style Helper Syntax
 
-Some widgets reuse these parsing functions:
+Some views reuse these parsing functions:
 
 | Syntax | Example | Description |
 | --- | --- | --- |
@@ -142,16 +142,16 @@ Some widgets reuse these parsing functions:
 | `rounded-[Npx]` | `rounded-[10px]` | Custom corner radius. |
 | `font-*` | `font-thin`, `font-light`, `font-normal`, `font-medium`, `font-semibold`, `font-bold`, `font-black` | Font weight. |
 
-These are shared parsing capabilities, not automatically supported by all widgets. Widgets must use these parsing results in their own class update logic.
+These are shared parsing capabilities, not automatically supported by all views. Views must use these parsing results in their own class update logic.
 
 ## Processing Path
 
 Class names passed to `.class(...)` go through these user-visible processing steps:
 
 1. Split by whitespace into multiple class tokens.
-2. `z-*` is handled as widget layer level.
+2. `z-*` is handled as view layer level.
 3. Other tokens are split into state and actual class name by state prefix.
-4. The actual class name is passed to the widget's style parsing logic.
+4. The actual class name is passed to the view's style parsing logic.
 5. The same batch of classes is also passed to the layout class parsing logic.
 
-For specific layout class support, see [Layout Class Syntax](/en/api/layout-class). For widget style class support, see the widget documentation or widget source code.
+For specific layout class support, see [Layout Class Syntax](/en/api/layout-class). For view style class support, see the view documentation or view source code.

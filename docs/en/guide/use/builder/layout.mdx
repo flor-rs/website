@@ -1,10 +1,10 @@
 # Layout Builder
 
-Layout Builder is used to configure display mode, size, spacing, positioning, Flex/Grid and other layout properties when creating widgets. Basic writing is calling `.layout(|layout| { ... })` after widget, continuously calling layout methods in closure, finally returning modified `layout`.
+Layout Builder is used to configure display mode, size, spacing, positioning, Flex/Grid and other layout properties when creating views. Basic writing is calling `.layout(|layout| { ... })` after view, continuously calling layout methods in closure, finally returning modified `layout`.
 
 ## Basic Writing
 
-After importing `LayoutBuilder`, all widgets can call `.layout(...)`. Also need to import `LayoutResolverExt`, so `layout` in closure can use `display`, `size`, `flex_grow` and other layout methods.
+After importing `LayoutBuilder`, all views can call `.layout(...)`. Also need to import `LayoutResolverExt`, so `layout` in closure can use `display`, `size`, `flex_grow` and other layout methods.
 
 Following example uses flex related types, assuming you already enabled `layout-flex` feature.
 
@@ -46,7 +46,7 @@ let panel = div(views![label("Content")])
 
 Closure must return modified `layout`. If closure captures external signal or variable, usually needs to write as `move |layout| { ... }`.
 
-Flor currently doesn't have direct `.width(100)`, `.height(40)`, `.x(10)`, `.y(20)`这类 layout builder methods. Size, position, margin are all expressed through `size`, `inset`, `margin` and other layout parameters.
+Flor currently doesn't have direct `.width(100)`, `.height(40)`, `.x(10)`, `.y(20)` — these kinds of layout builder methods. Size, position, margin are all expressed through `size`, `inset`, `margin` and other layout parameters.
 
 ## Chain Writing and set Writing
 
@@ -79,11 +79,11 @@ let item = label("Toggleable")
     });
 ```
 
-> `set_` methods are mainly used when widget development, parsing atomic class assignment
+> `set_` methods are mainly used when view development, parsing atomic class assignment
 
 ## State Layout
 
-Layout can also be set separately by widget state. After calling `hover()`, `focus()`, `active()` and other state methods, subsequent layout settings will write to corresponding state; calling `normal()` or `base()` can switch back to normal state.
+Layout can also be set separately by view state. After calling `hover()`, `focus()`, `active()` and other state methods, subsequent layout settings will write to corresponding state; calling `normal()` or `base()` can switch back to normal state.
 
 | Method | Parameter | Purpose |
 | --- | --- | --- |
@@ -120,13 +120,13 @@ Layout values mainly come from `flor::taffy`, unit types come from `flor::view::
 
 | Unit | Meaning | Conversion Base |
 | --- | --- | --- |
-| `Unit::Px` | Pixel. | No conversion, passed多少 is多少 px. |
+| `Unit::Px` | Pixel. | No conversion, whatever value is passed is the px value. |
 | `Unit::Pt` | point, common font/typesetting unit. | Uses current window DPI conversion, formula is `1pt = dpi / 72 px`. Normal layout length uses window's vertical DPI; window reads DPI from platform when creating, updates when DPI changes. |
 | `Unit::Rem` | root em. | Uses current window's `WindowOption::rem_px`, default is `16.0`, so default `1rem = 16px`. |
 | `Unit::Vw` | viewport width. | `1vw = current window client area width / 100`. Updates after window resize. |
 | `Unit::Vh` | viewport height. | `1vh = current window client area height / 100`. Updates after window resize. |
 
-Whenever layout value and `Unit` appear together in method, rule is: layout value负责 expressing length, percent or auto, `Unit` only decides how to parse this number when value is length. For example `Dimension::Length(12.0)` paired with `Unit::Px` means 12px; `Dimension::Percent(0.5)` and `Dimension::Auto` don't depend on unit.
+Whenever layout value and `Unit` appear together in method, rule is: layout value is responsible for expressing length, percent or auto, `Unit` only decides how to parse this number when value is length. For example `Dimension::Length(12.0)` paired with `Unit::Px` means 12px; `Dimension::Percent(0.5)` and `Dimension::Auto` don't depend on unit.
 
 ## Core Layout Parameters
 

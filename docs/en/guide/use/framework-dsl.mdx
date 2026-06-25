@@ -1,14 +1,14 @@
 # Framework DSL
 
-Flor's interface code can be written as a set of normal Rust DSL: functions负责 composing widgets, parameters负责 passing in properties, signals and handlers, return value is already configured widget.
+Flor's interface code can be written as a set of normal Rust DSL: functions are responsible for composing views, parameters are responsible for passing in properties, signals and handlers, and the return value is an already configured view.
 
-This has similar usage feeling to JSX: page is not a large string template, but a set of widget functions that can be split, reused, passed parameters. Difference is Flor doesn't need extra template language, composition itself is Rust's function calls and chain methods.
+This has similar usage feeling to JSX: page is not a large string template, but a set of view functions that can be split, reused, passed parameters. Difference is Flor doesn't need extra template language, composition itself is Rust's function calls and chain methods.
 
 If not yet familiar with how `.class(...)`、`.layout(...)`、`.style(...)` multiple calls merge, first see [Resolver Layer Mechanism](/en/guide/use/resolver-layer).
 
-## How to Express Widget Tree
+## How to Express View Tree
 
-Flor's most common child widget list writing is `views![...]`:
+Flor's most common child view list writing is `views![...]`:
 
 ```rust
 use flor::views;
@@ -23,9 +23,9 @@ let panel = div(views![
 ]);
 ```
 
-`views![...]` accepts a set of widget expressions, and converts them into widget list. It's suitable for expanding child nodes at widget tree site, especially when directly writing multiple child widgets in container.
+`views![...]` accepts a set of view expressions, and converts them into view list. It's suitable for expanding child nodes at view tree site, especially when directly writing multiple child views in container.
 
-If only need to convert single widget into generic widget object, can use `view!(...)`:
+If only need to convert single view into generic view object, can use `view!(...)`:
 
 ```rust
 use flor_lys::label::label;
@@ -33,13 +33,13 @@ use flor_lys::label::label;
 let title = flor::view!(label("Account Login"));
 ```
 
-Macro is not a required entry point. It just makes writing a widget tree in place more convenient. When you need to pass a single widget according to some parameter type, directly calling `into_view()`, or passing the value to an API that accepts `IntoViewIter`, is often clearer.
+Macro is not a required entry point. It just makes writing a view tree in place more convenient. When you need to pass a single view according to some parameter type, directly calling `into_view()`, or passing the value to an API that accepts `IntoViewIter`, is often clearer.
 
 ## IntoView and IntoViewIter
 
-`IntoView` / `IntoViewIter` are used to convert widgets into Flor's more generic widget forms. They are not only used for method return values, but also for widget parameters, module parameters, container children, and other places where types need to line up.
+`IntoView` / `IntoViewIter` are used to convert views into Flor's more generic view forms. They are not only used for method return values, but also for view parameters, module parameters, container children, and other places where types need to line up.
 
-In the current public API, single-widget conversion is `IntoView`, while child-widget sequence conversion is `IntoViewIter`. A single widget also implements `IntoViewIter`, so passing only one child no longer requires manually converting it into a list first. When encapsulating functions, a single widget can return `impl View` or `impl IntoView`; multiple widgets can return `impl IntoViewIter`:
+In the current public API, single-view conversion is `IntoView`, while child-view sequence conversion is `IntoViewIter`. A single view also implements `IntoViewIter`, so passing only one child no longer requires manually converting it into a list first. When encapsulating functions, a single view can return `impl View` or `impl IntoView`; multiple views can return `impl IntoViewIter`:
 
 ```rust
 use flor::view::builder::ClassBuilder;
@@ -66,9 +66,9 @@ fn action_buttons() -> impl IntoViewIter {
 }
 ```
 
-`title_view()` returns a normal widget, caller can still continue接 `.class(...)`、`.layout(...)` etc. builders. `title_child()` more emphasizes "this return value will be taken as single child widget passed in". `action_buttons()` then表示 this function returns a set of child widgets.
+`title_view()` returns a normal view, caller can still continue chaining `.class(...)`, `.layout(...)` etc. builders. `title_child()` more emphasizes "this return value will be taken as single child view passed in". `action_buttons()` then indicates this function returns a set of child views.
 
-For example, containers such as `div(...)` accept `impl IntoViewIter`. When there is only one child widget, you can pass that widget directly:
+For example, containers such as `div(...)` accept `impl IntoViewIter`. When there is only one child view, you can pass that view directly:
 
 ```rust
 use flor::view::builder::ClassBuilder;
@@ -81,7 +81,7 @@ let empty = div(
 );
 ```
 
-If a widget or module parameter wants one child widget, mark it as `impl IntoView`; if it wants a set of child widgets or should accept either a single child or a list, mark it as `impl IntoViewIter`:
+If a view or module parameter wants one child view, mark it as `impl IntoView`; if it wants a set of child views or should accept either a single child or a list, mark it as `impl IntoViewIter`:
 
 ```rust
 use flor::view::builder::ClassBuilder;
@@ -104,23 +104,23 @@ let confirm = dialog(
 );
 ```
 
-Key point of writing this way is to let parameters and return values express clearly: here needs normal widget, generic widget object, or a set of child widgets that can continue交给 container.
+Key point of writing this way is to let parameters and return values express clearly: here needs normal view, generic view object, or a set of child views that can be passed on to a container.
 
-Macro and conversion capabilities can be used together. `views![...]` is suitable for writing multiple child nodes in place, and `into_view()` is suitable for aligning an existing widget expression to a generic widget object:
+Macro and conversion capabilities can be used together. `views![...]` is suitable for writing multiple child nodes in place, and `into_view()` is suitable for aligning an existing view expression to a generic view object:
 
 | Writing | Usage |
 | --- | --- |
-| `fn f() -> impl View` | Encapsulate a complete widget, and retain continue chain configuration capability. |
-| `fn f() -> impl IntoView` | Encapsulate a single widget prepared to be passed as a child, while still allowing common builders to be chained. |
-| `fn f() -> impl IntoViewIter` | Encapsulate a set of child widgets prepared for a container; a single widget also satisfies this bound. |
-| `child.into_view()` | Convert a single widget into a generic widget object. |
-| `child` as an `IntoViewIter` argument | Treat a single widget as a child sequence containing only that widget. |
-| `views![a, b, c]` | Write child widget list at widget tree site. |
-| `view!(child)` | Convert a single widget into a generic widget object when the macro form is useful. |
+| `fn f() -> impl View` | Encapsulate a complete view, and retain continue chain configuration capability. |
+| `fn f() -> impl IntoView` | Encapsulate a single view prepared to be passed as a child, while still allowing common builders to be chained. |
+| `fn f() -> impl IntoViewIter` | Encapsulate a set of child views prepared for a container; a single view also satisfies this bound. |
+| `child.into_view()` | Convert a single view into a generic view object. |
+| `child` as an `IntoViewIter` argument | Treat a single view as a child sequence containing only that view. |
+| `views![a, b, c]` | Write child view list at view tree site. |
+| `view!(child)` | Convert a single view into a generic view object when the macro form is useful. |
 
 ## Continue Chaining After Return
 
-`IntoView` inherits `ViewIdentity`, and common builders now use `ViewIdentity` to read widget identity. This means that when a function returns `impl IntoView`, the caller can still continue chaining `.class(...)`, `.layout(...)`, `.on_click(...)`, `.focus_index(...)`, and similar builder methods:
+`IntoView` inherits `ViewIdentity`, and common builders now use `ViewIdentity` to read view identity. This means that when a function returns `impl IntoView`, the caller can still continue chaining `.class(...)`, `.layout(...)`, `.on_click(...)`, `.focus_index(...)`, and similar builder methods:
 
 ```rust
 use flor::view::builder::{ClassBuilder, EventBuilder};
@@ -138,21 +138,21 @@ let save = toolbar_button("Save")
     });
 ```
 
-This kind of encapsulation no longer needs to force a return type of `impl View` just to keep chaining available. When the function means "return a value that can be passed as a child widget", `impl IntoView` is more direct.
+This kind of encapsulation no longer needs to force a return type of `impl View` just to keep chaining available. When the function means "return a value that can be passed as a child view", `impl IntoView` is more direct.
 
 ## Why Need Macro
 
-Flor provides `views![...]`, is to make writing child widget list on site more handy, meanwhile avoid Rust tuple's length problem in UI child node expression.
+Flor provides `views![...]`, is to make writing child view list on site more handy, meanwhile avoid Rust tuple's length problem in UI child node expression.
 
-Floem这类 frameworks can use tuple to express child widgets, for example `(a, b, c)`. This writing is very natural, but in stable Rust, framework usually needs to separately implement trait for different length tuples. That is, it's not infinite length: how many child nodes supported, depends on how many groups of tuple implementations framework wrote.
+Floem and similar frameworks can use tuple to express child views, for example `(a, b, c)`. This writing is very natural, but in stable Rust, framework usually needs to separately implement trait for different length tuples. That is, it's not infinite length: how many child nodes supported, depends on how many groups of tuple implementations framework wrote.
 
-`views![...]` will directly expand into widget list, doesn't need to separately implement trait for each child node quantity, also doesn't easily let user hit tuple length limit when child widget quantity increases.
+`views![...]` will directly expand into view list, doesn't need to separately implement trait for each child node quantity, also doesn't easily let user hit tuple length limit when child view quantity increases.
 
 Later adding tuple support is feasible, practice usually is to supplement implementation for common length tuples, let user can write `(a, b)` or `(a, b, c)` in simple scenarios. But as long as stable Rust doesn't have true variadic generics, tuple support itself will still have a framework defined limit. So even if later supports tuple, `views![...]` is also more suitable as stable writing when no fixed child node quantity.
 
-## Method Composing Widgets
+## Method Composing Views
 
-Minimum encapsulation is writing a widget's layout, style and events into function, then returning it:
+Minimum encapsulation is writing a view's layout, style and events into function, then returning it:
 
 ```rust
 use flor::view::builder::{ClassBuilder, EventBuilder, StringProp};
@@ -176,7 +176,7 @@ where
 
 Here `Args` is the inference marker for the event handler's parameter form. With this signature, callers can pass a full click handler, a no-argument handler, a `ViewId`-only handler, or a handler without `ViewId`. If this used the old `impl Into<OnClickHandler>` form, only the full-signature `From` conversion would remain, and simplified parameter forms would be lost.
 
-Caller only needs to care about this widget's exposed parameters:
+Caller only needs to care about this view's exposed parameters:
 
 ```rust
 let save = primary_button("Save", |view_id| {
@@ -184,11 +184,11 @@ let save = primary_button("Save", |view_id| {
 });
 ```
 
-Here `primary_button` is like a small widget. How it internally writes class, how binds events, for caller are all collected into function boundary.
+Here `primary_button` is like a small view. How it internally writes class, how binds events, for caller are all collected into function boundary.
 
 ## Composing into Module
 
-Multiple widgets can also be encapsulated into a composite widget or business module. For example login module can encapsulate title, code button, login button and layout together:
+Multiple views can also be encapsulated into a composite view or business module. For example login module can encapsulate title, code button, login button and layout together:
 
 ```rust
 use flor::view::builder::{ClassBuilder, EventBuilder};
@@ -218,7 +218,7 @@ fn login_module<LoginArgs, SendCodeArgs>(
 
 Use a separate `Args` generic for each handler parameter, such as `LoginArgs` and `SendCodeArgs` here. They have no business meaning; they only let each handler infer its own parameter form independently.
 
-This function returns not template fragment, but a complete widget. Caller can pass handler as parameter:
+This function returns not template fragment, but a complete view. Caller can pass handler as parameter:
 
 ```rust
 let login = login_module(
@@ -235,7 +235,7 @@ If module needs reactive state, can also pass signal as parameter, let module in
 
 ## Continue Configuring After Return
 
-Widget returned by function can still continue using builder. That is, module internally can write default layout and style, caller can externally continue supplementing or overriding:
+View returned by function can still continue using builder. That is, module internally can write default layout and style, caller can externally continue supplementing or overriding:
 
 ```rust
 use flor::view::builder::ClassBuilder;
@@ -248,8 +248,8 @@ Here `login_module` internally already wrote `flex flex-col gap-3 p-4`, caller o
 
 ## Why Suitable for AI
 
-Flor's this set of DSL walks common functional UI expression path: methods compose widgets, properties, signals and handlers pass as variables, return value continues participating in composition.
+Flor's this set of DSL walks common functional UI expression path: methods compose views, properties, signals and handlers pass as variables, return value continues participating in composition.
 
-Large amount of AI models are already familiar with React, JSX, functional components and declarative UI organization方式, so they更容易 migrate to Flor's writing: recognize widget tree, complete properties, split modules, adjust layout and event binding.
+Large amount of AI models are already familiar with React, JSX, functional components and declarative UI organization patterns, so they more easily migrate to Flor's writing: recognize view tree, complete properties, split modules, adjust layout and event binding.
 
-This is also reason mentioned in [AI](/en/guide/ai) page: Flor didn't design this way for AI, but this DSL API naturally walked onto expression path AI already trained on, also更容易 understands.
+This is also reason mentioned in [AI](/en/guide/ai) page: Flor didn't design this way for AI, but this DSL API naturally walked onto expression path AI already trained on, and is also more easily understood.

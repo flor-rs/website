@@ -1,6 +1,6 @@
 # Disable Builder
 
-Disable Builder is used to switch widget to `ControlState::Disabled`. It's application-side configuration widget state builder, not a method custom widget authors need to override in `View` trait.
+Disable Builder is used to switch view to `ControlState::Disabled`. It's application-side configuration view state builder, not a method custom view authors need to override in `View` trait.
 
 Currently exposed interface is:
 
@@ -14,7 +14,7 @@ pub trait DisableBuilder {
 
 ## Basic Writing
 
-After importing `DisableBuilder`, all widgets implementing `View` can call `.disable(...)`.
+After importing `DisableBuilder`, all views implementing `View` can call `.disable(...)`.
 
 ```rust
 use flor::view::builder::DisableBuilder;
@@ -61,11 +61,11 @@ let submit = button("Submit")
 
 `.disable(...)` internally will:
 
-1. Read current widget's `ViewId`.
+1. Read current view's `ViewId`.
 2. Use `create_updater_with_id` to create an updater.
 3. Write `ViewState.disable` when updater changes.
-4. Attach effect id to current `ViewId`'s pending effect list, widget creation process will activate it.
+4. Attach effect id to current `ViewId`'s pending effect list, view creation process will activate it.
 
-Disable state participates in `ControlState` calculation, and has highest priority: `Disabled > Active > Focus > Hover > Normal`. Widget authors read `ControlState::Disabled` in `on_draw`, `on_measure` or event handling, decide visual and interaction behavior in disabled state.
+Disable state participates in `ControlState` calculation, and has highest priority: `Disabled > Active > Focus > Hover > Normal`. View authors read `ControlState::Disabled` in `on_draw`, `on_measure` or event handling, decide visual and interaction behavior in disabled state.
 
 Disable doesn't automatically remove focus table entry, also doesn't automatically cancel current focus. When need runtime change focus capability, use [ViewId](/en/guide/control/view-id)'s focus API.
